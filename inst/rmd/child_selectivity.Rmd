@@ -1,0 +1,37 @@
+
+Selectivity {data-navmenu="Model"}
+=====================================
+
+Row {.tabset}
+-------------------------------------
+
+### Selectivity at Age
+
+```{r sel_age}
+mv_plot_selectivity(
+  df      = mv$selectivity_at_age,
+  by_sex  = length(sexes) > 1,
+  title   = "Selectivity at Age"
+)
+```
+
+### Selectivity by Sex
+
+```{r sel_sex, eval=length(sexes) > 1}
+mv_plot_selectivity(
+  df      = mv$selectivity_at_age,
+  by_sex  = TRUE,
+  title   = "Selectivity by Sex"
+)
+```
+
+### Release Probability
+
+```{r rel_prob, eval=!is.null(mv$release_probability)}
+mv_plot_selectivity(
+  df     = mv$release_probability,
+  by_sex = length(sexes) > 1,
+  ylab   = "Release probability",
+  title  = "Release Probability at Age"
+)
+```

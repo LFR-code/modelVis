@@ -1,0 +1,32 @@
+Package: modelVis
+Title: Interactive Diagnostics Dashboards for Stock Assessment
+    Models
+Version: 0.1.0
+Authors@R:
+    person("Samuel", "Johnson", role = c("aut", "cre"),
+           email = "sdnjohnson@landmarkfisheries.com")
+Author: Samuel Johnson [aut, cre]
+Maintainer: Samuel Johnson <sdnjohnson@landmarkfisheries.com>
+Description: Generates interactive HTML flexdashboard reports
+    for stock assessment model diagnostics. Converts raw model
+    output into standardised data structures and renders
+    navigable dashboards with plotly visualisations. Currently
+    supports sableOpMod with planned support for SISCA models.
+License: GPL (>= 3)
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Imports:
+    plotly,
+    rmarkdown,
+    grDevices,
+    stats,
+    utils
+Suggests:
+    flexdashboard,
+    htmltools,
+    knitr,
+    htmlwidgets,
+    scales,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3

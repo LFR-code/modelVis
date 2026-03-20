@@ -1,0 +1,54 @@
+
+Model Comparison {data-navmenu="Comparison"}
+=====================================
+
+```{r comp_setup}
+all_mv <- c(list(mv), comp_mv)
+```
+
+Row {.tabset}
+-------------------------------------
+
+### Spawning Biomass
+
+```{r comp_sb}
+mv_plot_compare(
+  mv_list   = all_mv,
+  component = "spawning_biomass",
+  ylab      = "Spawning biomass",
+  title     = "Spawning Biomass Comparison"
+)
+```
+
+### Legal Biomass
+
+```{r comp_lb}
+mv_plot_compare(
+  mv_list   = all_mv,
+  component = "legal_biomass",
+  ylab      = "Legal biomass",
+  title     = "Legal Biomass Comparison"
+)
+```
+
+### Recruitment
+
+```{r comp_rec}
+mv_plot_compare(
+  mv_list   = all_mv,
+  component = "recruitment",
+  ylab      = "Recruitment",
+  title     = "Recruitment Comparison"
+)
+```
+
+### Legal Harvest Rate
+
+```{r comp_hr}
+mv_plot_compare(
+  mv_list   = all_mv,
+  component = "legal_hr",
+  ylab      = "Legal harvest rate",
+  title     = "Legal Harvest Rate Comparison"
+)
+```

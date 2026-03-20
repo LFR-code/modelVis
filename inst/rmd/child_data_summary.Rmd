@@ -1,0 +1,38 @@
+
+Data Summary
+=====================================
+
+Row
+-------------------------------------
+
+### Model Information
+
+```{r data_summary}
+info_df <- data.frame(
+  Property = c(
+    "Model type", "Label",
+    "Years", "Ages",
+    "Sexes", "Fleets", "Areas",
+    "Length comps", "Discards", "MCMC"
+  ),
+  Value = c(
+    meta$model_type,
+    meta$label,
+    paste(min(years), "-", max(years)),
+    paste(min(ages), "-", max(ages)),
+    paste(sexes, collapse = ", "),
+    paste(fleets, collapse = ", "),
+    paste(areas, collapse = ", "),
+    ifelse(test = has_len, yes = "Yes", no = "No"),
+    ifelse(test = has_disc, yes = "Yes", no = "No"),
+    ifelse(test = has_mcmc, yes = "Yes", no = "No")
+  ),
+  stringsAsFactors = FALSE
+)
+
+knitr::kable(
+  x         = info_df,
+  caption   = "Model summary",
+  row.names = FALSE
+)
+```

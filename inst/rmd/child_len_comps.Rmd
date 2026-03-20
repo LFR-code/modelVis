@@ -1,0 +1,93 @@
+
+Length Compositions {data-navmenu="Data Fits"}
+=====================================
+
+Row {.tabset}
+-------------------------------------
+
+### Length Comp Fits
+
+```{r len_comp_grid}
+len_fleets <- unique(mv$len_comp_fits$fleet)
+len_sexes  <- unique(mv$len_comp_fits$sex)
+
+plot_list <- list()
+for (fl in len_fleets) {
+  for (sx in len_sexes) {
+    sub <- mv$len_comp_fits[
+      mv$len_comp_fits$fleet == fl &
+        mv$len_comp_fits$sex == sx,
+      , drop = FALSE
+    ]
+    if (nrow(sub) == 0) next
+    lbl <- if (length(len_sexes) > 1) {
+      paste(fl, "-", sx)
+    } else {
+      fl
+    }
+    p <- mv_plot_comp_grid(
+      df      = sub,
+      bin_col = "length",
+      ylab    = "Proportion"
+    )
+    p <- layout(p = p, title = lbl)
+    plot_list[[length(plot_list) + 1L]] <- p
+  }
+}
+if (length(plot_list) == 1L) {
+  plot_list[[1]]
+} else {
+  htmltools::tagList(plot_list)
+}
+```
+
+### Length Comp Residual Bubbles
+
+```{r len_resid_bubble}
+if (!is.null(mv$len_comp_resids)) {
+  resid_plots <- list()
+  for (fl in len_fleets) {
+    sub <- mv$len_comp_resids[
+      mv$len_comp_resids$fleet == fl,
+      , drop = FALSE
+    ]
+    if (nrow(sub) == 0) next
+    p <- mv_plot_bubble(
+      df    = sub,
+      x_col = "year",
+      y_col = "length",
+      title = fl
+    )
+    resid_plots[[length(resid_plots) + 1L]] <- p
+  }
+  if (length(resid_plots) == 1L) {
+    resid_plots[[1]]
+  } else {
+    htmltools::tagList(resid_plots)
+  }
+}
+```
+
+### Mean Length Composition
+
+```{r len_mean}
+avg_plots <- list()
+for (fl in len_fleets) {
+  sub <- mv$len_comp_fits[
+    mv$len_comp_fits$fleet == fl,
+    , drop = FALSE
+  ]
+  if (nrow(sub) == 0) next
+  p <- mv_plot_comp_avg(
+    df      = sub,
+    bin_col = "length",
+    title   = paste("Mean -", fl)
+  )
+  avg_plots[[length(avg_plots) + 1L]] <- p
+}
+if (length(avg_plots) == 1L) {
+  avg_plots[[1]]
+} else {
+  htmltools::tagList(avg_plots)
+}
+```

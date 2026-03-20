@@ -1,0 +1,58 @@
+
+Recruitment {data-navmenu="Population"}
+=====================================
+
+Row {.tabset}
+-------------------------------------
+
+### Recruitment Trend
+
+```{r rec_trend}
+mv_plot_trend(
+  df         = mv$recruitment,
+  ylab       = "Recruitment",
+  colour     = "#2ca02c",
+  title      = "Recruitment",
+  log_buttons = TRUE
+)
+```
+
+### Recruitment Deviations
+
+```{r rec_devs, eval=!is.null(mv$rec_devs)}
+rd <- mv$rec_devs
+p <- plot_ly(data = rd, x = ~year, y = ~est)
+p <- add_bars(
+  p = p,
+  marker = list(
+    color = ifelse(
+      test = rd$est >= 0,
+      yes  = "#2ca02c",
+      no   = "#d62728"
+    )
+  ),
+  showlegend = FALSE,
+  hovertemplate = "%{x}: %{y:.3f}<extra></extra>"
+)
+lay <- modelVis:::.mv_layout()
+lay$xaxis$title <- "Year"
+lay$yaxis$title <- "Recruitment deviation"
+lay$title <- "Recruitment Deviations"
+lay$shapes <- list(list(
+  type = "line",
+  x0 = min(rd$year), x1 = max(rd$year),
+  y0 = 0, y1 = 0,
+  line = list(color = "#666666", dash = "dash")
+))
+p <- do.call(what = layout, args = c(list(p = p), lay))
+modelVis:::.mv_config(p = p)
+```
+
+### Stock-Recruitment
+
+```{r sr_plot, eval=!is.null(mv$stock_recruit)}
+mv_plot_sr(
+  df    = mv$stock_recruit,
+  title = "Stock-Recruitment Relationship"
+)
+```

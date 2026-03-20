@@ -1,0 +1,123 @@
+
+Age Compositions {data-navmenu="Data Fits"}
+=====================================
+
+Row {.tabset}
+-------------------------------------
+
+### Age Comp Fits
+
+```{r age_comp_grid}
+# Show grid for each fleet, stacked vertically
+age_fleets <- unique(mv$age_comp_fits$fleet)
+age_sexes  <- unique(mv$age_comp_fits$sex)
+
+plot_list <- list()
+for (fl in age_fleets) {
+  for (sx in age_sexes) {
+    sub <- mv$age_comp_fits[
+      mv$age_comp_fits$fleet == fl &
+        mv$age_comp_fits$sex == sx,
+      , drop = FALSE
+    ]
+    if (nrow(sub) == 0) next
+    lbl <- if (length(age_sexes) > 1) {
+      paste(fl, "-", sx)
+    } else {
+      fl
+    }
+    p <- mv_plot_comp_grid(
+      df      = sub,
+      bin_col = "age",
+      ylab    = "Proportion"
+    )
+    p <- layout(
+      p = p,
+      title = lbl
+    )
+    plot_list[[length(plot_list) + 1L]] <- p
+  }
+}
+
+if (length(plot_list) == 1L) {
+  plot_list[[1]]
+} else {
+  htmltools::tagList(plot_list)
+}
+```
+
+### Age Comp Residual Bubbles
+
+```{r age_resid_bubble}
+if (!is.null(mv$age_comp_resids)) {
+  resid_plots <- list()
+  for (fl in age_fleets) {
+    sub <- mv$age_comp_resids[
+      mv$age_comp_resids$fleet == fl,
+      , drop = FALSE
+    ]
+    if (nrow(sub) == 0) next
+    p <- mv_plot_bubble(
+      df    = sub,
+      x_col = "year",
+      y_col = "age",
+      title = fl
+    )
+    resid_plots[[length(resid_plots) + 1L]] <- p
+  }
+  if (length(resid_plots) == 1L) {
+    resid_plots[[1]]
+  } else {
+    htmltools::tagList(resid_plots)
+  }
+}
+```
+
+### Mean Age Composition
+
+```{r age_mean}
+avg_plots <- list()
+for (fl in age_fleets) {
+  sub <- mv$age_comp_fits[
+    mv$age_comp_fits$fleet == fl,
+    , drop = FALSE
+  ]
+  if (nrow(sub) == 0) next
+  p <- mv_plot_comp_avg(
+    df      = sub,
+    bin_col = "age",
+    title   = paste("Mean -", fl)
+  )
+  avg_plots[[length(avg_plots) + 1L]] <- p
+}
+if (length(avg_plots) == 1L) {
+  avg_plots[[1]]
+} else {
+  htmltools::tagList(avg_plots)
+}
+```
+
+### Residual Diagnostics
+
+```{r age_resid_panel}
+if (!is.null(mv$age_comp_resids)) {
+  diag_plots <- list()
+  for (fl in age_fleets) {
+    sub <- mv$age_comp_resids[
+      mv$age_comp_resids$fleet == fl,
+      , drop = FALSE
+    ]
+    if (nrow(sub) == 0) next
+    p <- mv_plot_resid_panel(
+      df    = sub,
+      title = paste("Residual Diagnostics -", fl)
+    )
+    diag_plots[[length(diag_plots) + 1L]] <- p
+  }
+  if (length(diag_plots) == 1L) {
+    diag_plots[[1]]
+  } else {
+    htmltools::tagList(diag_plots)
+  }
+}
+```

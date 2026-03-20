@@ -1,0 +1,57 @@
+
+Likelihood {data-navmenu="Model"}
+=====================================
+
+Row
+-------------------------------------
+
+### Likelihood Components
+
+```{r lik_table}
+lik <- mv$likelihood_table
+# Remove zero-contribution rows
+lik <- lik[lik$nll != 0, , drop = FALSE]
+
+# Summary table
+knitr::kable(
+  x       = lik,
+  caption = paste0(
+    "Negative log-likelihood components",
+    if (!is.null(mv$obj_fun))
+      paste0(" (Total: ",
+             formatC(x = mv$obj_fun, digits = 4,
+                     format = "f"), ")")
+    else ""
+  ),
+  digits    = 4,
+  row.names = FALSE
+)
+```
+
+### Likelihood Bar Chart
+
+```{r lik_bar}
+lik$label <- paste(lik$component, lik$fleet, sep = " - ")
+lik <- lik[order(lik$nll, decreasing = TRUE),
+           , drop = FALSE]
+
+p <- plot_ly(
+  data = lik,
+  x    = ~reorder(x = label, X = -nll),
+  y    = ~nll,
+  type = "bar",
+  marker = list(
+    color = "#1f77b4",
+    line  = list(color = "white", width = 0.5)
+  ),
+  hovertemplate = "%{x}: %{y:.2f}<extra></extra>"
+)
+lay <- modelVis:::.mv_layout()
+lay$xaxis$title <- ""
+lay$xaxis$tickangle <- -45
+lay$yaxis$title <- "Negative log-likelihood"
+lay$title <- "Likelihood Component Contributions"
+lay$showlegend <- FALSE
+p <- do.call(what = layout, args = c(list(p = p), lay))
+modelVis:::.mv_config(p = p)
+```

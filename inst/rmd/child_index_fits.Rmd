@@ -1,0 +1,45 @@
+
+Index Fits {data-navmenu="Data Fits"}
+=====================================
+
+Row {.tabset}
+-------------------------------------
+
+### Index Fits by Fleet
+
+```{r idx_facet}
+mv_plot_obs_pred_facet(
+  df    = mv$index_fits,
+  facet = "fleet",
+  ylab  = "Index"
+)
+```
+
+### Index Residuals
+
+```{r idx_resid}
+idx_r <- mv$index_fits[
+  !is.na(mv$index_fits$residual), , drop = FALSE
+]
+if (nrow(idx_r) > 0) {
+  mv_plot_bubble(
+    df     = idx_r,
+    x_col  = "year",
+    y_col  = "fleet",
+    xlab   = "Year",
+    ylab   = "Fleet",
+    title  = "Index Residuals"
+  )
+}
+```
+
+### Index Residual Diagnostics
+
+```{r idx_resid_panel}
+if (nrow(idx_r) > 0) {
+  mv_plot_resid_panel(
+    df    = idx_r,
+    title = "Index Residual Diagnostics"
+  )
+}
+```

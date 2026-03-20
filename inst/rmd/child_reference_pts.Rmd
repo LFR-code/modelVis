@@ -1,0 +1,34 @@
+
+Reference Points {data-navmenu="Model"}
+=====================================
+
+Row {.tabset}
+-------------------------------------
+
+### Yield Curves
+
+```{r yield_curves, eval=has_refcrv}
+mv_plot_refcurves(
+  ref_curves = mv$ref_curves,
+  ref_points = mv$ref_points,
+  title      = "Equilibrium Reference Curves"
+)
+```
+
+### Kobe Plot
+
+```{r kobe_plot, eval=has_refpts && !is.null(mv$ref_points$SBmsy) && !is.null(mv$ref_points$lUmsy)}
+# Compute B/Bmsy and U/Umsy ratios
+b_ratio <- mv$spawning_biomass$est /
+  mv$ref_points$SBmsy
+u_ratio <- mv$legal_hr$est / mv$ref_points$lUmsy
+
+mv_plot_kobe(
+  biomass   = b_ratio,
+  mortality = u_ratio,
+  years     = mv$spawning_biomass$year,
+  xlab      = "SB/SBmsy",
+  ylab      = "U/Umsy",
+  title     = "Kobe Phase Plot"
+)
+```

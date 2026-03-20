@@ -1,0 +1,88 @@
+/* modelVis flexdashboard styling */
+
+.chart-wrapper {
+  padding: 5px;
+}
+
+.chart-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333333;
+}
+
+.navbar {
+  background-color: #2c3e50;
+}
+
+.navbar-brand {
+  font-weight: 700;
+}
+
+/* Plotly charts: responsive and reduced padding */
+.plotly {
+  margin: 0;
+  width: 100% !important;
+}
+
+.plotly .main-svg {
+  width: 100% !important;
+}
+
+/* Table styling */
+table.dataTable {
+  font-size: 12px;
+}
+
+/* Tab styling */
+.nav-tabs > li > a {
+  font-size: 13px;
+  padding: 8px 15px;
+}
+
+/* Value box adjustments */
+.value-box .inner {
+  padding: 10px;
+}
+
+.value-box .value {
+  font-size: 24px;
+}
+
+.value-box .caption {
+  font-size: 12px;
+}
+
+/* ---- Mobile responsive ---- */
+@media (max-width: 768px) {
+  .chart-wrapper {
+    padding: 2px;
+  }
+
+  .chart-title {
+    font-size: 12px;
+  }
+
+  .nav-tabs > li > a {
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+
+  /* Stack subplot columns vertically */
+  .section.level3 {
+    width: 100% !important;
+    flex: none !important;
+  }
+
+  /* Smaller fonts in tables */
+  table.dataTable {
+    font-size: 10px;
+  }
+
+  .value-box .value {
+    font-size: 18px;
+  }
+
+  .value-box .caption {
+    font-size: 10px;
+  }
+}

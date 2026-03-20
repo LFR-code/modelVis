@@ -1,0 +1,83 @@
+
+Life History {data-navmenu="Model"}
+=====================================
+
+Row {.tabset}
+-------------------------------------
+
+### Weight at Age
+
+```{r waa_plot}
+waa <- mv$weight_at_age
+p <- plot_ly()
+for (sx in unique(waa$sex)) {
+  sub <- waa[waa$sex == sx, , drop = FALSE]
+  sc <- mv_sex_colours(sex_names = unique(waa$sex))
+  p <- add_lines(
+    p = p,
+    x    = sub$age,
+    y    = sub$est,
+    name = sx,
+    line = list(color = sc[sx], width = 2),
+    hovertemplate = paste0(
+      sx, " age %{x}: %{y:.3g} kg<extra></extra>"
+    )
+  )
+}
+lay <- modelVis:::.mv_layout()
+lay$xaxis$title <- "Age"
+lay$yaxis$title <- "Weight (kg)"
+lay$title <- "Weight at Age"
+lay$showlegend <- TRUE
+p <- do.call(what = layout, args = c(list(p = p), lay))
+modelVis:::.mv_config(p = p)
+```
+
+### Length at Age
+
+```{r laa_plot, eval=!is.null(mv$length_at_age)}
+laa <- mv$length_at_age
+p <- plot_ly()
+for (sx in unique(laa$sex)) {
+  sub <- laa[laa$sex == sx, , drop = FALSE]
+  sc <- mv_sex_colours(sex_names = unique(laa$sex))
+  p <- add_lines(
+    p = p,
+    x    = sub$age,
+    y    = sub$est,
+    name = sx,
+    line = list(color = sc[sx], width = 2),
+    hovertemplate = paste0(
+      sx, " age %{x}: %{y:.1f} cm<extra></extra>"
+    )
+  )
+}
+lay <- modelVis:::.mv_layout()
+lay$xaxis$title <- "Age"
+lay$yaxis$title <- "Length (cm)"
+lay$title <- "Length at Age"
+lay$showlegend <- TRUE
+p <- do.call(what = layout, args = c(list(p = p), lay))
+modelVis:::.mv_config(p = p)
+```
+
+### Maturity at Age
+
+```{r maa_plot, eval=!is.null(mv$maturity_at_age)}
+maa <- mv$maturity_at_age
+p <- plot_ly(
+  data = maa, x = ~age, y = ~est
+)
+p <- add_lines(
+  p = p,
+  line = list(color = "#1f77b4", width = 2),
+  showlegend = FALSE,
+  hovertemplate = "Age %{x}: %{y:.3f}<extra></extra>"
+)
+lay <- modelVis:::.mv_layout()
+lay$xaxis$title <- "Age"
+lay$yaxis$title <- "Proportion mature"
+lay$title <- "Maturity at Age"
+p <- do.call(what = layout, args = c(list(p = p), lay))
+modelVis:::.mv_config(p = p)
+```

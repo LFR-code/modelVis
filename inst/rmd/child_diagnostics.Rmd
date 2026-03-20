@@ -1,0 +1,49 @@
+
+MCMC Diagnostics {data-navmenu="Diagnostics"}
+=====================================
+
+Row {.tabset}
+-------------------------------------
+
+### MCMC Summary
+
+```{r mcmc_summary}
+diag <- mv$mcmc_diagnostics
+info_df <- data.frame(
+  Property = c("Number of iterations",
+               "Parameters sampled"),
+  Value = c(
+    if (!is.null(diag$n_iter))
+      as.character(diag$n_iter) else "Unknown",
+    if (!is.null(diag$parameters))
+      as.character(length(diag$parameters)) else "Unknown"
+  ),
+  stringsAsFactors = FALSE
+)
+knitr::kable(
+  x         = info_df,
+  caption   = "MCMC diagnostics summary",
+  row.names = FALSE
+)
+```
+
+### Spawning Biomass Posterior
+
+```{r mcmc_sb}
+mv_plot_trend(
+  df    = mv$spawning_biomass,
+  ylab  = "Spawning biomass",
+  title = "Spawning Biomass (with 95% CI from MCMC)"
+)
+```
+
+### Recruitment Posterior
+
+```{r mcmc_rec}
+mv_plot_trend(
+  df     = mv$recruitment,
+  ylab   = "Recruitment",
+  colour = "#2ca02c",
+  title  = "Recruitment (with 95% CI from MCMC)"
+)
+```

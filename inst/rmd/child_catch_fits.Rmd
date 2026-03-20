@@ -1,0 +1,26 @@
+
+Catch Fits {data-navmenu="Data Fits"}
+=====================================
+
+Row {.tabset}
+-------------------------------------
+
+### Catch Fits by Fleet
+
+```{r catch_facet}
+mv_plot_obs_pred_facet(
+  df    = mv$catch_fits,
+  facet = "fleet",
+  ylab  = "Catch"
+)
+```
+
+### Discard Fits
+
+```{r disc_facet, eval=has_disc && !is.null(mv$discard_fits)}
+mv_plot_obs_pred_facet(
+  df    = mv$discard_fits,
+  facet = "fleet",
+  ylab  = "Discards"
+)
+```
