@@ -10,19 +10,22 @@ Row {.tabset}
 ```{r mcmc_summary}
 diag <- mv$mcmc_diagnostics
 info_df <- data.frame(
-  Property = c("Number of iterations",
-               "Parameters sampled"),
+  Property = c(
+    "Number of iterations",
+    "Parameters sampled"
+  ),
   Value = c(
     if (!is.null(diag$n_iter))
       as.character(diag$n_iter) else "Unknown",
     if (!is.null(diag$parameters))
-      as.character(length(diag$parameters)) else "Unknown"
+      as.character(length(diag$parameters))
+    else "Unknown"
   ),
   stringsAsFactors = FALSE
 )
 knitr::kable(
-  x         = info_df,
-  caption   = "MCMC diagnostics summary",
+  x = info_df,
+  caption = "MCMC diagnostics summary",
   row.names = FALSE
 )
 ```
@@ -33,7 +36,7 @@ knitr::kable(
 mv_plot_trend(
   df    = mv$spawning_biomass,
   ylab  = "Spawning biomass",
-  title = "Spawning Biomass (with 95% CI from MCMC)"
+  title = "Spawning Biomass (posterior median + 95% CI)"
 )
 ```
 
@@ -44,6 +47,22 @@ mv_plot_trend(
   df     = mv$recruitment,
   ylab   = "Recruitment",
   colour = "#2ca02c",
-  title  = "Recruitment (with 95% CI from MCMC)"
+  title  = "Recruitment (posterior median + 95% CI)"
+)
+```
+
+### Legal HR Posterior
+
+```{r mcmc_hr}
+mv_plot_trend(
+  df     = mv$legal_hr,
+  ylab   = "Legal harvest rate",
+  title  = "Legal HR (posterior median + 95% CI)",
+  ref_line = if (has_refpts &&
+    !is.null(mv$ref_points$lUmsy))
+    mv$ref_points$lUmsy else NULL,
+  ref_label = if (has_refpts &&
+    !is.null(mv$ref_points$lUmsy))
+    "Umsy" else NULL
 )
 ```

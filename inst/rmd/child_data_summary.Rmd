@@ -5,14 +5,67 @@ Data Summary
 Row
 -------------------------------------
 
+### Data Availability
+
+```{r data_avail_plot, eval=!is.null(mv$data_availability)}
+da <- mv$data_availability
+da$present_num <- as.integer(da$present)
+
+# Encode as fleet x datatype grid across years
+fc <- mv_fleet_colours(fleet_names = fleets)
+
+p <- plot_ly()
+dtypes <- rev(unique(da$datatype))
+for (i in seq_along(dtypes)) {
+  dt <- dtypes[i]
+  for (j in seq_along(fleets)) {
+    fl <- fleets[j]
+    sub <- da[da$datatype == dt & da$fleet == fl &
+              da$present, , drop = FALSE]
+    if (nrow(sub) == 0) next
+    # Stagger vertically within datatype
+    y_val <- i + (j - 1) * 0.15
+    p <- add_markers(
+      p = p,
+      x = sub$year,
+      y = rep(y_val, nrow(sub)),
+      marker = list(
+        color = fc[fl], size = 5,
+        symbol = "circle"
+      ),
+      name = fl,
+      legendgroup = fl,
+      showlegend = (i == 1),
+      hovertemplate = paste0(
+        fl, " ", dt, " %{x}<extra></extra>"
+      )
+    )
+  }
+}
+
+lay <- modelVis::mv_layout()
+lay$yaxis$tickvals <- seq_along(dtypes)
+lay$yaxis$ticktext <- dtypes
+lay$yaxis$title <- ""
+lay$xaxis$title <- "Year"
+lay$title <- "Data Availability"
+lay$showlegend <- TRUE
+lay$margin$l <- 100
+
+p <- do.call(what = layout, args = c(list(p = p), lay))
+modelVis::mv_config(p = p)
+```
+
 ### Model Information
 
-```{r data_summary}
+```{r model_info}
 info_df <- data.frame(
   Property = c(
     "Model type", "Label",
     "Years", "Ages",
-    "Sexes", "Fleets", "Areas",
+    "Sexes", "Fleets",
+    "Commercial", "Survey",
+    "Areas",
     "Length comps", "Discards", "MCMC"
   ),
   Value = c(
@@ -22,6 +75,8 @@ info_df <- data.frame(
     paste(min(ages), "-", max(ages)),
     paste(sexes, collapse = ", "),
     paste(fleets, collapse = ", "),
+    paste(comm_fleets, collapse = ", "),
+    paste(survey_fleets, collapse = ", "),
     paste(areas, collapse = ", "),
     ifelse(test = has_len, yes = "Yes", no = "No"),
     ifelse(test = has_disc, yes = "Yes", no = "No"),
@@ -29,10 +84,8 @@ info_df <- data.frame(
   ),
   stringsAsFactors = FALSE
 )
-
 knitr::kable(
-  x         = info_df,
-  caption   = "Model summary",
+  x = info_df, caption = "Model summary",
   row.names = FALSE
 )
 ```

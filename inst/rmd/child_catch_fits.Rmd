@@ -1,26 +1,154 @@
 
-Catch Fits {data-navmenu="Data Fits"}
+Catch Fits {data-navmenu="Fits to Data"}
 =====================================
 
 Row {.tabset}
 -------------------------------------
 
-### Catch Fits by Fleet
+### Landings
 
-```{r catch_facet}
-mv_plot_obs_pred_facet(
-  df    = mv$catch_fits,
-  facet = "fleet",
-  ylab  = "Catch"
-)
+```{r catch_landings}
+# One panel per commercial fleet, single column
+catch <- mv$catch_fits
+catch_fl <- catch[catch$fleet %in% comm_fleets,
+                  , drop = FALSE]
+if (nrow(catch_fl) > 0) {
+  fc <- mv_fleet_colours(fleet_names = comm_fleets)
+  plot_list <- list()
+  for (fl in comm_fleets) {
+    sub <- catch_fl[catch_fl$fleet == fl, , drop = FALSE]
+    p <- plot_ly()
+
+    # Predicted line
+    pred_sub <- sub[!is.na(sub$pred), , drop = FALSE]
+    if (nrow(pred_sub) > 0) {
+      p <- add_lines(
+        p = p,
+        x = pred_sub$year, y = pred_sub$pred,
+        line = list(color = fc[fl], width = 2),
+        name = paste(fl, "Pred"),
+        showlegend = FALSE,
+        hovertemplate = paste0(
+          fl, " Pred %{x}: %{y:.3g}<extra></extra>"
+        )
+      )
+    }
+
+    # Observed points
+    obs_sub <- sub[!is.na(sub$obs) & sub$obs > 0,
+                   , drop = FALSE]
+    if (nrow(obs_sub) > 0) {
+      p <- add_markers(
+        p = p,
+        x = obs_sub$year, y = obs_sub$obs,
+        marker = list(
+          color = fc[fl], size = 5,
+          symbol = "circle-open",
+          line = list(color = fc[fl], width = 1.5)
+        ),
+        name = paste(fl, "Obs"),
+        showlegend = FALSE,
+        hovertemplate = paste0(
+          fl, " Obs %{x}: %{y:.3g}<extra></extra>"
+        )
+      )
+    }
+
+    lay <- modelVis::mv_layout()
+    lay$annotations <- list(mv_top_label(label = fl))
+    lay$yaxis$title <- "Landings"
+    p <- do.call(
+      what = layout, args = c(list(p = p), lay)
+    )
+    plot_list[[length(plot_list) + 1L]] <- p
+  }
+
+  p_out <- subplot(
+    plot_list,
+    nrows = length(plot_list),
+    shareX = TRUE, titleY = TRUE,
+    margin = 0.04
+  )
+  p_out <- layout(
+    p = p_out, xaxis = list(title = "Year")
+  )
+  modelVis::mv_config(p = p_out)
+}
 ```
 
-### Discard Fits
+### Releases
 
-```{r disc_facet, eval=has_disc && !is.null(mv$discard_fits)}
-mv_plot_obs_pred_facet(
-  df    = mv$discard_fits,
-  facet = "fleet",
-  ylab  = "Discards"
+```{r catch_releases, eval=has_disc && !is.null(mv$discard_fits)}
+disc <- mv$discard_fits
+disc_fl <- disc[disc$fleet %in% comm_fleets,
+                , drop = FALSE]
+if (nrow(disc_fl) > 0) {
+  fc <- mv_fleet_colours(fleet_names = comm_fleets)
+  plot_list <- list()
+  for (fl in comm_fleets) {
+    sub <- disc_fl[disc_fl$fleet == fl, , drop = FALSE]
+    p <- plot_ly()
+
+    pred_sub <- sub[!is.na(sub$pred), , drop = FALSE]
+    if (nrow(pred_sub) > 0) {
+      p <- add_lines(
+        p = p,
+        x = pred_sub$year, y = pred_sub$pred,
+        line = list(color = fc[fl], width = 2),
+        showlegend = FALSE,
+        hovertemplate = paste0(
+          fl, " Pred %{x}: %{y:.3g}<extra></extra>"
+        )
+      )
+    }
+
+    obs_sub <- sub[!is.na(sub$obs) & sub$obs > 0,
+                   , drop = FALSE]
+    if (nrow(obs_sub) > 0) {
+      p <- add_markers(
+        p = p,
+        x = obs_sub$year, y = obs_sub$obs,
+        marker = list(
+          color = fc[fl], size = 5,
+          line = list(color = "white", width = 0.5)
+        ),
+        showlegend = FALSE,
+        hovertemplate = paste0(
+          fl, " Obs %{x}: %{y:.3g}<extra></extra>"
+        )
+      )
+    }
+
+    lay <- modelVis::mv_layout()
+    lay$annotations <- list(mv_top_label(label = fl))
+    lay$yaxis$title <- "Releases"
+    p <- do.call(
+      what = layout, args = c(list(p = p), lay)
+    )
+    plot_list[[length(plot_list) + 1L]] <- p
+  }
+
+  p_out <- subplot(
+    plot_list,
+    nrows = length(plot_list),
+    shareX = TRUE, titleY = TRUE,
+    margin = 0.04
+  )
+  p_out <- layout(
+    p = p_out, xaxis = list(title = "Year")
+  )
+  modelVis::mv_config(p = p_out)
+}
+```
+
+### Observation Error
+
+```{r obs_error_table, eval=!is.null(mv$obs_error)}
+oe <- mv$obs_error
+oe$tau <- round(x = oe$tau, digits = 4)
+knitr::kable(
+  x = oe,
+  caption = "Estimated observation standard deviations",
+  row.names = FALSE
 )
 ```

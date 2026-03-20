@@ -18,17 +18,220 @@ mv_plot_refcurves(
 ### Kobe Plot
 
 ```{r kobe_plot, eval=has_refpts && !is.null(mv$ref_points$SBmsy) && !is.null(mv$ref_points$lUmsy)}
-# Compute B/Bmsy and U/Umsy ratios
 b_ratio <- mv$spawning_biomass$est /
   mv$ref_points$SBmsy
 u_ratio <- mv$legal_hr$est / mv$ref_points$lUmsy
 
-mv_plot_kobe(
-  biomass   = b_ratio,
-  mortality = u_ratio,
-  years     = mv$spawning_biomass$year,
-  xlab      = "SB/SBmsy",
-  ylab      = "U/Umsy",
-  title     = "Kobe Phase Plot"
+# Build Kobe with equilibrium SSB curve in background
+kc <- modelVis::mv_kobe_colours()
+df <- data.frame(
+  year = mv$spawning_biomass$year,
+  b = b_ratio, f = u_ratio,
+  stringsAsFactors = FALSE
 )
+df <- df[order(df$year), , drop = FALSE]
+
+x_max <- max(c(df$b, 2), na.rm = TRUE) * 1.2
+y_max <- max(c(df$f, 2), na.rm = TRUE) * 1.2
+
+shapes <- list(
+  list(type = "rect", x0 = 1, x1 = x_max,
+       y0 = 0, y1 = 1,
+       fillcolor = kc["green"], layer = "below",
+       line = list(width = 0)),
+  list(type = "rect", x0 = 0, x1 = 1,
+       y0 = 1, y1 = y_max,
+       fillcolor = kc["red"], layer = "below",
+       line = list(width = 0)),
+  list(type = "rect", x0 = 1, x1 = x_max,
+       y0 = 1, y1 = y_max,
+       fillcolor = kc["yellow_top"], layer = "below",
+       line = list(width = 0)),
+  list(type = "rect", x0 = 0, x1 = 1,
+       y0 = 0, y1 = 1,
+       fillcolor = kc["yellow_right"], layer = "below",
+       line = list(width = 0))
+)
+
+p <- plot_ly()
+
+# Equilibrium SSB curve in background (if ref_curves)
+if (has_refcrv && !is.null(mv$ref_curves$legalU) &&
+    !is.null(mv$ref_curves$biomass)) {
+  rc <- mv$ref_curves
+  # Filter feasible and convert to relative
+  feas <- rc$legalU >= 0 & rc$biomass >= 0
+  rc_feas <- rc[feas, , drop = FALSE]
+  if (nrow(rc_feas) > 0 &&
+      !is.null(mv$ref_points$SBmsy) &&
+      !is.null(mv$ref_points$lUmsy)) {
+    eq_b <- rc_feas$biomass / mv$ref_points$SBmsy
+    eq_u <- rc_feas$legalU / mv$ref_points$lUmsy
+    p <- add_lines(
+      p = p,
+      x = eq_b, y = eq_u,
+      line = list(
+        color = "rgba(150,150,150,0.3)", width = 2
+      ),
+      showlegend = FALSE, hoverinfo = "skip"
+    )
+  }
+}
+
+# Trajectory
+p <- add_lines(
+  p = p,
+  x = df$b, y = df$f,
+  line = list(color = "#333333", width = 1),
+  showlegend = FALSE, hoverinfo = "skip"
+)
+
+# Year markers
+p <- add_markers(
+  p = p,
+  x = df$b, y = df$f,
+  marker = list(
+    color = "#333333", size = 4,
+    line = list(color = "white", width = 0.5)
+  ),
+  text = df$year,
+  hovertemplate = paste0(
+    "Year: %{text}<br>SB/SBmsy: %{x:.2f}<br>",
+    "U/Umsy: %{y:.2f}<extra></extra>"
+  ),
+  showlegend = FALSE
+)
+
+# Terminal year star
+n <- nrow(df)
+p <- add_markers(
+  p = p,
+  x = df$b[n], y = df$f[n],
+  marker = list(
+    color = "#d62728", size = 10,
+    symbol = "star",
+    line = list(color = "white", width = 1)
+  ),
+  name = as.character(df$year[n]),
+  showlegend = FALSE,
+  hovertemplate = paste0(
+    df$year[n], "<br>SB/SBmsy: %{x:.2f}<br>",
+    "U/Umsy: %{y:.2f}<extra></extra>"
+  )
+)
+
+lay <- modelVis::mv_layout()
+lay$xaxis$title <- "SB / SBmsy"
+lay$yaxis$title <- "U / Umsy"
+lay$title <- "Kobe Phase Plot"
+lay$shapes <- shapes
+lay$showlegend <- FALSE
+p <- do.call(
+  what = layout, args = c(list(p = p), lay)
+)
+modelVis::mv_config(p = p)
+```
+
+### Status Distributions
+
+```{r status_dists, eval=has_mcmc && has_refpts && !is.null(mv$ref_points$SBmsy) && !is.null(mv$ref_points$lUmsy)}
+# Bivariate posterior of B/Bmsy vs U/Umsy
+# Uses terminal year SB and U posteriors
+# (lwr/upr give the 95% CI but we need the full
+# posterior for the scatter — for now show crosshairs
+# from the CI)
+
+sb_term <- mv$spawning_biomass[
+  mv$spawning_biomass$year == max(years),
+  , drop = FALSE
+]
+hr_term <- mv$legal_hr[
+  mv$legal_hr$year == max(years),
+  , drop = FALSE
+]
+
+b_est <- sb_term$est / mv$ref_points$SBmsy
+u_est <- hr_term$est / mv$ref_points$lUmsy
+b_lwr <- sb_term$lwr / mv$ref_points$SBmsy
+b_upr <- sb_term$upr / mv$ref_points$SBmsy
+u_lwr <- hr_term$lwr / mv$ref_points$lUmsy
+u_upr <- hr_term$upr / mv$ref_points$lUmsy
+
+p <- plot_ly()
+
+# Crosshair segments
+p <- add_trace(
+  p = p, type = "scatter", mode = "lines",
+  x = c(b_lwr, b_upr), y = c(u_est, u_est),
+  line = list(color = "#333333", width = 2),
+  showlegend = FALSE, hoverinfo = "skip"
+)
+p <- add_trace(
+  p = p, type = "scatter", mode = "lines",
+  x = c(b_est, b_est), y = c(u_lwr, u_upr),
+  line = list(color = "#333333", width = 2),
+  showlegend = FALSE, hoverinfo = "skip"
+)
+
+# Median point
+p <- add_markers(
+  p = p,
+  x = b_est, y = u_est,
+  marker = list(
+    color = "black", size = 8
+  ),
+  showlegend = FALSE,
+  hovertemplate = paste0(
+    "B/Bmsy: %{x:.2f}<br>U/Umsy: %{y:.2f}",
+    "<extra></extra>"
+  )
+)
+
+# Reference lines
+status_shapes <- list(
+  list(type = "line", x0 = 0.4, x1 = 0.4,
+       y0 = 0, y1 = 1, yref = "paper",
+       line = list(color = "#d62728", width = 1.5,
+                   dash = "dash")),
+  list(type = "line", x0 = 0.8, x1 = 0.8,
+       y0 = 0, y1 = 1, yref = "paper",
+       line = list(color = "#ff7f0e", width = 1.5,
+                   dash = "dash")),
+  list(type = "line", x0 = 1, x1 = 1,
+       y0 = 0, y1 = 1, yref = "paper",
+       line = list(color = "#2ca02c", width = 1.5,
+                   dash = "dash")),
+  list(type = "line",
+       x0 = 0, x1 = 1, xref = "paper",
+       y0 = 1, y1 = 1,
+       line = list(color = "#d62728", width = 1.5,
+                   dash = "dash"))
+)
+
+# Status annotations
+ann_text <- paste0(
+  "B/Bmsy = ", round(x = b_est, digits = 2),
+  "<br>U/Umsy = ", round(x = u_est, digits = 2)
+)
+status_ann <- list(list(
+  x = 0.98, y = 0.98,
+  xref = "paper", yref = "paper",
+  text = ann_text,
+  showarrow = FALSE, xanchor = "right",
+  yanchor = "top",
+  font = list(size = 11),
+  bgcolor = "rgba(255,255,255,0.8)",
+  bordercolor = "#cccccc", borderwidth = 1
+))
+
+lay <- modelVis::mv_layout()
+lay$xaxis$title <- "B / Bmsy"
+lay$yaxis$title <- "U / Umsy"
+lay$title <- paste("Stock Status", max(years))
+lay$shapes <- status_shapes
+lay$annotations <- status_ann
+p <- do.call(
+  what = layout, args = c(list(p = p), lay)
+)
+modelVis::mv_config(p = p)
 ```

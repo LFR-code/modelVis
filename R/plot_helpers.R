@@ -131,12 +131,13 @@ mv_log_linear_buttons <- function() {
 
 #' Configure plotly modebar
 #'
-#' Applies standard config to a plotly object.
+#' Applies standard config to a plotly object with
+#' responsive sizing and a clean modebar.
 #'
 #' @param p A plotly object.
 #' @return A configured plotly object.
-#' @keywords internal
-.mv_config <- function(p) {
+#' @export
+mv_config <- function(p) {
   config(
     p = p,
     displaylogo = FALSE,
@@ -146,3 +147,6 @@ mv_log_linear_buttons <- function() {
     )
   )
 }
+
+# Internal alias for backward compatibility
+.mv_config <- mv_config

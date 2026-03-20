@@ -1,0 +1,156 @@
+
+Optimisation {data-navmenu="Diagnostics"}
+=====================================
+
+Row {.tabset}
+-------------------------------------
+
+### Objective Function Components
+
+```{r nll_table}
+lik <- mv$likelihood_table
+if (!is.null(lik)) {
+  lik <- lik[lik$nll != 0, , drop = FALSE]
+  lik$nll <- round(x = lik$nll, digits = 2)
+  knitr::kable(
+    x = lik,
+    caption = paste0(
+      "Negative log-likelihood components",
+      if (!is.null(mv$fit_diagnostics$obj_fun))
+        paste0(" (Total obj fun: ",
+               round(x = mv$fit_diagnostics$obj_fun,
+                     digits = 2), ")")
+      else ""
+    ),
+    row.names = FALSE
+  )
+}
+```
+
+### Prior NLP Components
+
+```{r prior_table, eval=!is.null(mv$prior_table)}
+pt <- mv$prior_table
+pt <- pt[pt$nlp != 0, , drop = FALSE]
+knitr::kable(
+  x = pt,
+  caption = "Negative log-prior contributions",
+  row.names = FALSE,
+  col.names = c("Component", "NLP")
+)
+```
+
+### NLL Bar Chart
+
+```{r optim_lik_bar, eval=!is.null(mv$likelihood_table)}
+lik2 <- mv$likelihood_table
+lik2 <- lik2[lik2$nll != 0, , drop = FALSE]
+lik2$label <- paste(lik2$component, lik2$fleet,
+                    sep = " - ")
+lik2 <- lik2[order(lik2$nll, decreasing = TRUE),
+             , drop = FALSE]
+
+p <- plot_ly(
+  data = lik2,
+  x    = ~reorder(x = label, X = -nll),
+  y    = ~nll,
+  type = "bar",
+  marker = list(
+    color = "#1f77b4",
+    line  = list(color = "white", width = 0.5)
+  ),
+  hovertemplate = "%{x}: %{y:.2f}<extra></extra>"
+)
+lay <- modelVis::mv_layout()
+lay$xaxis$title <- ""
+lay$xaxis$tickangle <- -45
+lay$yaxis$title <- "Negative log-likelihood"
+lay$showlegend <- FALSE
+p <- do.call(
+  what = layout, args = c(list(p = p), lay)
+)
+modelVis::mv_config(p = p)
+```
+
+### Prior NLP Bar Chart
+
+```{r optim_prior_bar, eval=!is.null(mv$prior_table)}
+pt2 <- mv$prior_table
+# Exclude per-fleet sel breakdown rows (indented)
+pt2 <- pt2[!grepl("^  ", pt2$component), , drop = FALSE]
+pt2 <- pt2[pt2$nlp != 0, , drop = FALSE]
+pt2 <- pt2[order(pt2$nlp, decreasing = TRUE),
+           , drop = FALSE]
+
+p <- plot_ly(
+  data = pt2,
+  x    = ~reorder(x = component, X = -nlp),
+  y    = ~nlp,
+  type = "bar",
+  marker = list(
+    color = "#ff7f0e",
+    line  = list(color = "white", width = 0.5)
+  ),
+  hovertemplate = "%{x}: %{y:.2f}<extra></extra>"
+)
+lay <- modelVis::mv_layout()
+lay$xaxis$title <- ""
+lay$xaxis$tickangle <- -45
+lay$yaxis$title <- "Negative log-prior"
+lay$showlegend <- FALSE
+p <- do.call(
+  what = layout, args = c(list(p = p), lay)
+)
+modelVis::mv_config(p = p)
+```
+
+### Phase Table
+
+```{r phase_table, eval=!is.null(mv$fit_diagnostics$fit_report)}
+fr <- mv$fit_diagnostics$fit_report
+if ("pdHess" %in% colnames(fr)) {
+  fr <- fr[, !colnames(fr) %in% "pdHess",
+           drop = FALSE]
+}
+num_cols <- vapply(
+  X = fr, FUN = is.numeric, FUN.VALUE = logical(1)
+)
+fr[, num_cols] <- lapply(
+  X = fr[, num_cols, drop = FALSE],
+  FUN = function(col) round(x = col, digits = 4)
+)
+knitr::kable(
+  x = fr,
+  caption = "Optimisation performance by phase",
+  row.names = FALSE
+)
+```
+
+### Parameter Estimates
+
+```{r grad_table_dt, eval=!is.null(mv$fit_diagnostics$grad_table)}
+gt <- as.data.frame(mv$fit_diagnostics$grad_table)
+gt$est <- round(x = gt$est, digits = 4)
+gt$se  <- round(x = gt$se, digits = 4)
+gt$gr  <- signif(x = gt$gr, digits = 2)
+gt$cv  <- round(x = gt$cv, digits = 4)
+gt$parameter <- rownames(gt)
+gt <- gt[, c("parameter", "est", "se", "gr", "cv"),
+         drop = FALSE]
+rownames(gt) <- NULL
+
+DT::datatable(
+  data = gt,
+  caption = paste0(
+    "SD report: parameter estimates, SEs, ",
+    "gradients, CVs"
+  ),
+  options = list(
+    pageLength = 25,
+    scrollX = TRUE,
+    order = list(list(4, "desc"))
+  ),
+  rownames = FALSE,
+  filter = "top"
+)
+```

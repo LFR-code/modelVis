@@ -83,8 +83,8 @@ mv_sex_colours <- function(sex_names) {
 #' Status zone colours for Kobe plot
 #'
 #' @return Named character vector with quadrant colours.
-#' @keywords internal
-.kobe_colours <- function() {
+#' @export
+mv_kobe_colours <- function() {
   c(
     green  = "#2ca02c80",
     yellow_right = "#ffff0060",
@@ -93,6 +93,9 @@ mv_sex_colours <- function(sex_names) {
   )
 }
 
+# Internal alias
+.kobe_colours <- mv_kobe_colours
+
 
 #' Standard plotly layout options
 #'
@@ -100,8 +103,8 @@ mv_sex_colours <- function(sex_names) {
 #' appearance across plots.
 #'
 #' @return A list suitable for \code{plotly::layout()}.
-#' @keywords internal
-.mv_layout <- function() {
+#' @export
+mv_layout <- function() {
   list(
     font = list(family = "Arial, sans-serif", size = 12),
     paper_bgcolor = "white",
@@ -117,3 +120,6 @@ mv_sex_colours <- function(sex_names) {
     )
   )
 }
+
+# Internal alias
+.mv_layout <- mv_layout

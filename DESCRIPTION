@@ -1,7 +1,7 @@
 Package: modelVis
 Title: Interactive Diagnostics Dashboards for Stock Assessment
     Models
-Version: 0.1.0
+Version: 0.1.2
 Authors@R:
     person("Samuel", "Johnson", role = c("aut", "cre"),
            email = "sdnjohnson@landmarkfisheries.com")
@@ -23,6 +23,7 @@ Imports:
     stats,
     utils
 Suggests:
+    DT,
     flexdashboard,
     htmltools,
     knitr,

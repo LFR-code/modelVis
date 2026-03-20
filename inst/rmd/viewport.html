@@ -1,0 +1,10 @@
+<script>
+// Override flexdashboard's restrictive viewport tag
+document.addEventListener('DOMContentLoaded', function() {
+  var vp = document.querySelector('meta[name="viewport"]');
+  if (vp) {
+    vp.setAttribute('content',
+      'width=device-width, initial-scale=1.0, user-scalable=yes');
+  }
+});
+</script>

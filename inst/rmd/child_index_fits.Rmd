@@ -1,45 +1,153 @@
 
-Index Fits {data-navmenu="Data Fits"}
+Index Fits {data-navmenu="Fits to Data"}
 =====================================
 
-Row {.tabset}
+Row
 -------------------------------------
 
-### Index Fits by Fleet
+### Index Fits with Residuals
 
-```{r idx_facet}
-mv_plot_obs_pred_facet(
-  df    = mv$index_fits,
-  facet = "fleet",
-  ylab  = "Index"
+```{r idx_fits_resid}
+# Single column: each fleet gets a fit panel + residual
+# panel below it, all sharing the x-axis
+
+idx <- mv$index_fits
+fit_fleets <- unique(idx$fleet)
+# Only show fleets with actual observations
+fit_fleets <- fit_fleets[vapply(
+  X = fit_fleets,
+  FUN = function(fl) {
+    any(!is.na(idx$obs[idx$fleet == fl]))
+  },
+  FUN.VALUE = logical(1)
+)]
+
+fc <- mv_fleet_colours(fleet_names = fit_fleets)
+plot_list <- list()
+
+for (fl in fit_fleets) {
+  sub <- idx[idx$fleet == fl, , drop = FALSE]
+  obs_sub <- sub[!is.na(sub$obs) & sub$obs > 0,
+                 , drop = FALSE]
+
+  # --- Fit panel ---
+  p_fit <- plot_ly()
+
+  # Predicted line (vulnerable biomass if available)
+  if (!is.null(mv$vulnerable_biomass)) {
+    vb <- mv$vulnerable_biomass[
+      mv$vulnerable_biomass$fleet == fl,
+      , drop = FALSE
+    ]
+    if (nrow(vb) > 0) {
+      p_fit <- add_lines(
+        p = p_fit,
+        x = vb$year, y = vb$est,
+        line = list(color = "#cccccc", width = 1.5),
+        name = "Vuln. biomass",
+        showlegend = FALSE,
+        hovertemplate = paste0(
+          "VB %{x}: %{y:.3g}<extra></extra>"
+        )
+      )
+    }
+  }
+
+  # Predicted index (qB)
+  pred_sub <- sub[!is.na(sub$pred) & sub$pred > 0,
+                  , drop = FALSE]
+  if (nrow(pred_sub) > 0) {
+    p_fit <- add_lines(
+      p = p_fit,
+      x = pred_sub$year, y = pred_sub$pred,
+      line = list(color = fc[fl], width = 2),
+      name = "Predicted",
+      showlegend = FALSE,
+      hovertemplate = paste0(
+        "Pred %{x}: %{y:.3g}<extra></extra>"
+      )
+    )
+  }
+
+  # Observed points
+  if (nrow(obs_sub) > 0) {
+    p_fit <- add_markers(
+      p = p_fit,
+      x = obs_sub$year, y = obs_sub$obs,
+      marker = list(
+        color = fc[fl], size = 6,
+        line = list(color = "white", width = 0.5)
+      ),
+      name = "Observed",
+      showlegend = FALSE,
+      hovertemplate = paste0(
+        "Obs %{x}: %{y:.3g}<extra></extra>"
+      )
+    )
+  }
+
+  lay_fit <- modelVis::mv_layout()
+  lay_fit$annotations <- list(
+    mv_top_label(label = fl)
+  )
+  lay_fit$yaxis$title <- "Index"
+  p_fit <- do.call(
+    what = layout,
+    args = c(list(p = p_fit), lay_fit)
+  )
+  plot_list[[length(plot_list) + 1L]] <- p_fit
+
+  # --- Residual panel ---
+  resid_sub <- sub[!is.na(sub$residual), , drop = FALSE]
+  p_resid <- plot_ly()
+  if (nrow(resid_sub) > 0) {
+    resid_col <- ifelse(
+      test = resid_sub$residual >= 0,
+      yes  = "#d62728", no = "#1f77b4"
+    )
+    p_resid <- add_bars(
+      p = p_resid,
+      x = resid_sub$year,
+      y = resid_sub$residual,
+      marker = list(color = resid_col),
+      showlegend = FALSE,
+      hovertemplate = paste0(
+        "%{x}: %{y:.3f}<extra></extra>"
+      )
+    )
+  }
+  lay_resid <- modelVis::mv_layout()
+  lay_resid$yaxis$title <- "Residual"
+  lay_resid$shapes <- list(list(
+    type = "line",
+    x0 = min(years), x1 = max(years),
+    y0 = 0, y1 = 0,
+    line = list(color = "#666666", dash = "dash")
+  ))
+  p_resid <- do.call(
+    what = layout,
+    args = c(list(p = p_resid), lay_resid)
+  )
+  plot_list[[length(plot_list) + 1L]] <- p_resid
+}
+
+# Stack: fit + resid pairs, each pair shares x
+n_panels <- length(plot_list)
+heights <- rep(c(0.7, 0.3), length.out = n_panels)
+heights <- heights / sum(heights)
+
+p_out <- subplot(
+  plot_list,
+  nrows = n_panels,
+  shareX = TRUE,
+  titleX = FALSE,
+  titleY = TRUE,
+  heights = heights,
+  margin = 0.02
 )
-```
-
-### Index Residuals
-
-```{r idx_resid}
-idx_r <- mv$index_fits[
-  !is.na(mv$index_fits$residual), , drop = FALSE
-]
-if (nrow(idx_r) > 0) {
-  mv_plot_bubble(
-    df     = idx_r,
-    x_col  = "year",
-    y_col  = "fleet",
-    xlab   = "Year",
-    ylab   = "Fleet",
-    title  = "Index Residuals"
-  )
-}
-```
-
-### Index Residual Diagnostics
-
-```{r idx_resid_panel}
-if (nrow(idx_r) > 0) {
-  mv_plot_resid_panel(
-    df    = idx_r,
-    title = "Index Residual Diagnostics"
-  )
-}
+p_out <- layout(
+  p = p_out,
+  xaxis = list(title = "Year")
+)
+modelVis::mv_config(p = p_out)
 ```

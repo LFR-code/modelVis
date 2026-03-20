@@ -1,5 +1,5 @@
 
-Selectivity {data-navmenu="Model"}
+Selectivity and Growth {data-navmenu="Model"}
 =====================================
 
 Row {.tabset}
@@ -9,20 +9,48 @@ Row {.tabset}
 
 ```{r sel_age}
 mv_plot_selectivity(
-  df      = mv$selectivity_at_age,
-  by_sex  = length(sexes) > 1,
-  title   = "Selectivity at Age"
+  df     = mv$selectivity_at_age,
+  by_sex = length(sexes) > 1,
+  title  = "Selectivity at Age"
 )
 ```
 
-### Selectivity by Sex
+### Selectivity at Length
 
-```{r sel_sex, eval=length(sexes) > 1}
-mv_plot_selectivity(
-  df      = mv$selectivity_at_age,
-  by_sex  = TRUE,
-  title   = "Selectivity by Sex"
+```{r sel_len, eval=!is.null(mv$selectivity_at_length)}
+# sel-at-length: curves by fleet
+sal <- mv$selectivity_at_length
+sal_fleets <- unique(sal$fleet)
+fc <- mv_fleet_colours(fleet_names = sal_fleets)
+
+p <- plot_ly()
+for (fl in sal_fleets) {
+  sub <- sal[sal$fleet == fl, , drop = FALSE]
+  # Average across sexes for overlay
+  avg <- tapply(
+    X = sub$est, INDEX = sub$length,
+    FUN = mean, na.rm = TRUE
+  )
+  p <- add_lines(
+    p = p,
+    x = as.numeric(names(avg)),
+    y = as.numeric(avg),
+    name = fl,
+    line = list(color = fc[fl], width = 2),
+    hovertemplate = paste0(
+      fl, " len %{x}: %{y:.3f}<extra></extra>"
+    )
+  )
+}
+lay <- modelVis::mv_layout()
+lay$xaxis$title <- "Length"
+lay$yaxis$title <- "Selectivity"
+lay$title <- "Selectivity at Length"
+lay$showlegend <- TRUE
+p <- do.call(
+  what = layout, args = c(list(p = p), lay)
 )
+modelVis::mv_config(p = p)
 ```
 
 ### Release Probability
@@ -34,4 +62,80 @@ mv_plot_selectivity(
   ylab   = "Release probability",
   title  = "Release Probability at Age"
 )
+```
+
+### Discard Proportions at Age
+
+```{r disc_comp, eval=!is.null(mv$discard_comp_fits)}
+dc <- mv$discard_comp_fits
+dc_fleets <- intersect(unique(dc$fleet), comm_fleets)
+sc <- mv_sex_colours(sex_names = sexes)
+
+plot_list <- list()
+for (fl in dc_fleets) {
+  sub <- dc[dc$fleet == fl, , drop = FALSE]
+  # Average across years
+  avg_list <- list()
+  for (sx in sexes) {
+    sx_sub <- sub[sub$sex == sx, , drop = FALSE]
+    if (nrow(sx_sub) == 0) next
+    avg <- tapply(
+      X = sx_sub$est, INDEX = sx_sub$age,
+      FUN = mean, na.rm = TRUE
+    )
+    avg_list[[sx]] <- data.frame(
+      age = as.numeric(names(avg)),
+      est = as.numeric(avg),
+      sex = sx,
+      stringsAsFactors = FALSE
+    )
+  }
+  if (length(avg_list) == 0) next
+  avg_df <- do.call(what = rbind, args = avg_list)
+
+  p <- plot_ly()
+  for (sx in sexes) {
+    sx_d <- avg_df[avg_df$sex == sx, , drop = FALSE]
+    if (nrow(sx_d) == 0) next
+    p <- add_bars(
+      p = p,
+      x = sx_d$age, y = sx_d$est,
+      name = sx,
+      marker = list(
+        color = sc[sx],
+        line = list(color = "white", width = 0.5)
+      ),
+      legendgroup = sx,
+      showlegend = (fl == dc_fleets[1]),
+      hovertemplate = paste0(
+        sx, " age %{x}: %{y:.4f}<extra></extra>"
+      )
+    )
+  }
+
+  lay <- modelVis::mv_layout()
+  lay$annotations <- list(mv_top_label(label = fl))
+  lay$barmode <- "group"
+  p <- do.call(
+    what = layout, args = c(list(p = p), lay)
+  )
+  plot_list[[length(plot_list) + 1L]] <- p
+}
+
+if (length(plot_list) > 0) {
+  p_out <- subplot(
+    plot_list,
+    nrows = length(plot_list),
+    shareX = TRUE, shareY = TRUE,
+    margin = 0.05
+  )
+  p_out <- layout(
+    p = p_out,
+    annotations = list(
+      mv_bottom_label(label = "Age"),
+      mv_left_label(label = "Mean discard proportion")
+    )
+  )
+  modelVis::mv_config(p = p_out)
+}
 ```

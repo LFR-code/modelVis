@@ -1,16 +1,126 @@
 
-Length Compositions {data-navmenu="Data Fits"}
+Length Compositions {data-navmenu="Fits to Data"}
 =====================================
 
 Row {.tabset}
 -------------------------------------
 
-### Length Comp Fits
+### Time-Averaged Fits
 
-```{r len_comp_grid}
+```{r len_avg_grid}
 len_fleets <- unique(mv$len_comp_fits$fleet)
 len_sexes  <- unique(mv$len_comp_fits$sex)
+fc <- mv_fleet_colours(fleet_names = len_fleets)
 
+plot_list <- list()
+for (fl in len_fleets) {
+  for (sx in len_sexes) {
+    sub <- mv$len_comp_fits[
+      mv$len_comp_fits$fleet == fl &
+        mv$len_comp_fits$sex == sx,
+      , drop = FALSE
+    ]
+    if (nrow(sub) == 0) next
+
+    avg_obs <- tapply(
+      X = sub$obs, INDEX = sub$length,
+      FUN = mean, na.rm = TRUE
+    )
+    avg_pred <- tapply(
+      X = sub$pred, INDEX = sub$length,
+      FUN = mean, na.rm = TRUE
+    )
+    avg_lens <- as.numeric(names(avg_obs))
+
+    lbl <- if (length(len_sexes) > 1) {
+      paste(fl, "-", sx)
+    } else {
+      fl
+    }
+
+    p <- plot_ly()
+    p <- add_bars(
+      p = p,
+      x = avg_lens, y = as.numeric(avg_pred),
+      marker = list(
+        color = fc[fl],
+        line = list(color = "white", width = 0.5)
+      ),
+      showlegend = FALSE,
+      hovertemplate = paste0(
+        "Len %{x}: %{y:.4f}<extra>Pred</extra>"
+      )
+    )
+    p <- add_markers(
+      p = p,
+      x = avg_lens, y = as.numeric(avg_obs),
+      marker = list(color = "black", size = 4),
+      showlegend = FALSE,
+      hovertemplate = paste0(
+        "Len %{x}: %{y:.4f}<extra>Obs</extra>"
+      )
+    )
+
+    lay <- modelVis::mv_layout()
+    lay$annotations <- list(
+      mv_top_label(label = lbl)
+    )
+    lay$barmode <- "overlay"
+    p <- do.call(
+      what = layout, args = c(list(p = p), lay)
+    )
+    plot_list[[length(plot_list) + 1L]] <- p
+  }
+}
+
+ncol_grid <- length(len_sexes)
+nrow_grid <- max(1, length(plot_list) %/% ncol_grid)
+p_out <- subplot(
+  plot_list,
+  nrows = nrow_grid,
+  shareX = TRUE, shareY = TRUE,
+  margin = 0.05
+)
+p_out <- layout(
+  p = p_out,
+  annotations = list(
+    mv_bottom_label(label = "Length"),
+    mv_left_label(label = "Mean proportion")
+  )
+)
+modelVis::mv_config(p = p_out)
+```
+
+### Residual Bubbles
+
+```{r len_resid_bubble}
+if (!is.null(mv$len_comp_resids)) {
+  resid_plots <- list()
+  for (fl in len_fleets) {
+    sub <- mv$len_comp_resids[
+      mv$len_comp_resids$fleet == fl,
+      , drop = FALSE
+    ]
+    if (nrow(sub) == 0) next
+    p <- mv_plot_bubble(
+      df    = sub,
+      x_col = "year",
+      y_col = "length",
+      title = fl
+    )
+    resid_plots[[length(resid_plots) + 1L]] <- p
+  }
+  if (length(resid_plots) == 1L) {
+    resid_plots[[1]]
+  } else {
+    htmltools::tagList(resid_plots)
+  }
+}
+```
+
+### Yearly Fits
+
+```{r len_yearly_grid}
 plot_list <- list()
 for (fl in len_fleets) {
   for (sx in len_sexes) {
@@ -38,56 +148,5 @@ if (length(plot_list) == 1L) {
   plot_list[[1]]
 } else {
   htmltools::tagList(plot_list)
-}
-```
-
-### Length Comp Residual Bubbles
-
-```{r len_resid_bubble}
-if (!is.null(mv$len_comp_resids)) {
-  resid_plots <- list()
-  for (fl in len_fleets) {
-    sub <- mv$len_comp_resids[
-      mv$len_comp_resids$fleet == fl,
-      , drop = FALSE
-    ]
-    if (nrow(sub) == 0) next
-    p <- mv_plot_bubble(
-      df    = sub,
-      x_col = "year",
-      y_col = "length",
-      title = fl
-    )
-    resid_plots[[length(resid_plots) + 1L]] <- p
-  }
-  if (length(resid_plots) == 1L) {
-    resid_plots[[1]]
-  } else {
-    htmltools::tagList(resid_plots)
-  }
-}
-```
-
-### Mean Length Composition
-
-```{r len_mean}
-avg_plots <- list()
-for (fl in len_fleets) {
-  sub <- mv$len_comp_fits[
-    mv$len_comp_fits$fleet == fl,
-    , drop = FALSE
-  ]
-  if (nrow(sub) == 0) next
-  p <- mv_plot_comp_avg(
-    df      = sub,
-    bin_col = "length",
-    title   = paste("Mean -", fl)
-  )
-  avg_plots[[length(avg_plots) + 1L]] <- p
-}
-if (length(avg_plots) == 1L) {
-  avg_plots[[1]]
-} else {
-  htmltools::tagList(avg_plots)
 }
 ```

@@ -5,54 +5,185 @@ Recruitment {data-navmenu="Population"}
 Row {.tabset}
 -------------------------------------
 
-### Recruitment Trend
+### Recruitment and Residuals
 
-```{r rec_trend}
-mv_plot_trend(
-  df         = mv$recruitment,
-  ylab       = "Recruitment",
-  colour     = "#2ca02c",
-  title      = "Recruitment",
-  log_buttons = TRUE
+```{r rec_resid_stack}
+# Two-panel stack: recruitment (top) + standardised
+# log-residuals (bottom)
+
+# --- Recruitment panel ---
+rec <- mv$recruitment
+p_rec <- plot_ly(data = rec, x = ~year)
+
+has_ci <- "lwr" %in% names(rec) && any(!is.na(rec$lwr))
+if (has_ci) {
+  p_rec <- add_ribbons(
+    p = p_rec,
+    ymin = ~lwr, ymax = ~upr,
+    line = list(width = 0),
+    fillcolor = "rgba(44,160,44,0.2)",
+    showlegend = FALSE, hoverinfo = "skip"
+  )
+}
+p_rec <- add_lines(
+  p = p_rec, y = ~est,
+  line = list(color = "#2ca02c", width = 2),
+  name = "Recruitment", showlegend = FALSE,
+  hovertemplate = "R %{x}: %{y:.3g}<extra></extra>"
 )
-```
 
-### Recruitment Deviations
-
-```{r rec_devs, eval=!is.null(mv$rec_devs)}
-rd <- mv$rec_devs
-p <- plot_ly(data = rd, x = ~year, y = ~est)
-p <- add_bars(
-  p = p,
-  marker = list(
-    color = ifelse(
-      test = rd$est >= 0,
-      yes  = "#2ca02c",
-      no   = "#d62728"
+# R0 reference line
+rec_shapes <- list()
+if (!is.null(mv$sr_params) &&
+    !is.null(mv$sr_params$R0)) {
+  rec_shapes <- list(list(
+    type = "line",
+    x0 = min(years), x1 = max(years),
+    y0 = mv$sr_params$R0, y1 = mv$sr_params$R0,
+    line = list(
+      color = "#999999", width = 1.5, dash = "dash"
     )
-  ),
-  showlegend = FALSE,
-  hovertemplate = "%{x}: %{y:.3f}<extra></extra>"
+  ))
+}
+lay_rec <- modelVis::mv_layout()
+lay_rec$yaxis$title <- "Recruitment"
+lay_rec$shapes <- rec_shapes
+p_rec <- do.call(
+  what = layout, args = c(list(p = p_rec), lay_rec)
 )
-lay <- modelVis:::.mv_layout()
-lay$xaxis$title <- "Year"
-lay$yaxis$title <- "Recruitment deviation"
-lay$title <- "Recruitment Deviations"
-lay$shapes <- list(list(
-  type = "line",
-  x0 = min(rd$year), x1 = max(rd$year),
-  y0 = 0, y1 = 0,
-  line = list(color = "#666666", dash = "dash")
-))
-p <- do.call(what = layout, args = c(list(p = p), lay))
-modelVis:::.mv_config(p = p)
+
+# --- Residuals panel ---
+p_resid <- plot_ly()
+if (!is.null(mv$rec_devs)) {
+  rd <- mv$rec_devs
+  # Standardise by sigmaR if available
+  sigma <- if (!is.null(mv$sr_params) &&
+               !is.null(mv$sr_params$sigmaR)) {
+    mv$sr_params$sigmaR
+  } else {
+    1
+  }
+  std_resid <- rd$est / sigma
+  resid_col <- ifelse(
+    test = std_resid >= 0,
+    yes  = "#2ca02c", no = "#d62728"
+  )
+  p_resid <- add_bars(
+    p = p_resid,
+    x = rd$year, y = std_resid,
+    marker = list(color = resid_col),
+    showlegend = FALSE,
+    hovertemplate = "%{x}: %{y:.3f}<extra></extra>"
+  )
+
+  # Mean residual reference line
+  mean_resid <- mean(std_resid, na.rm = TRUE)
+  resid_shapes <- list(
+    list(
+      type = "line",
+      x0 = min(rd$year), x1 = max(rd$year),
+      y0 = 0, y1 = 0,
+      line = list(color = "#666666", dash = "dash")
+    ),
+    list(
+      type = "line",
+      x0 = min(rd$year), x1 = max(rd$year),
+      y0 = mean_resid, y1 = mean_resid,
+      line = list(color = "#d62728", dash = "dot")
+    )
+  )
+  lay_resid <- modelVis::mv_layout()
+  lay_resid$xaxis$title <- "Year"
+  lay_resid$yaxis$title <- "Std. residual"
+  lay_resid$shapes <- resid_shapes
+  p_resid <- do.call(
+    what = layout,
+    args = c(list(p = p_resid), lay_resid)
+  )
+}
+
+p_out <- subplot(
+  p_rec, p_resid,
+  nrows = 2, shareX = TRUE,
+  titleY = TRUE,
+  heights = c(0.6, 0.4),
+  margin = 0.04
+)
+modelVis::mv_config(p = p_out)
 ```
 
 ### Stock-Recruitment
 
 ```{r sr_plot, eval=!is.null(mv$stock_recruit)}
-mv_plot_sr(
-  df    = mv$stock_recruit,
-  title = "Stock-Recruitment Relationship"
+sr <- mv$stock_recruit
+p <- plot_ly()
+
+# B-H curve overlay if params available
+if (has_sr) {
+  ssb_range <- seq(
+    from = 0,
+    to = max(sr$ssb, na.rm = TRUE) * 1.1,
+    length.out = 200
+  )
+  bh_r <- mv$sr_params$reca * ssb_range /
+    (1 + mv$sr_params$recb * ssb_range)
+  p <- add_lines(
+    p = p,
+    x = ssb_range, y = bh_r,
+    line = list(color = "#cccccc", width = 2),
+    name = "B-H curve", showlegend = FALSE,
+    hoverinfo = "skip"
+  )
+}
+
+# Observed points coloured by year
+p <- add_markers(
+  p = p,
+  x = sr$ssb, y = sr$recruitment,
+  color = ~sr$year,
+  colors = c("#1f77b4", "#d62728"),
+  marker = list(
+    size = 6,
+    line = list(color = "white", width = 0.5)
+  ),
+  text = ~sr$year,
+  hovertemplate = paste0(
+    "Year: %{text}<br>SSB: %{x:.3g}<br>",
+    "R: %{y:.3g}<extra></extra>"
+  ),
+  showlegend = FALSE
 )
+
+# B0/R0 reference lines
+sr_shapes <- list()
+if (!is.null(mv$sr_params$B0)) {
+  sr_shapes <- c(sr_shapes, list(list(
+    type = "line",
+    x0 = mv$sr_params$B0, x1 = mv$sr_params$B0,
+    y0 = 0, y1 = 1, yref = "paper",
+    line = list(
+      color = "#99999966", width = 1, dash = "dash"
+    )
+  )))
+}
+if (!is.null(mv$sr_params$R0)) {
+  sr_shapes <- c(sr_shapes, list(list(
+    type = "line",
+    x0 = 0, x1 = 1, xref = "paper",
+    y0 = mv$sr_params$R0, y1 = mv$sr_params$R0,
+    line = list(
+      color = "#99999966", width = 1, dash = "dash"
+    )
+  )))
+}
+
+lay <- modelVis::mv_layout()
+lay$xaxis$title <- "Spawning biomass"
+lay$yaxis$title <- "Recruitment"
+lay$title <- "Stock-Recruitment"
+lay$shapes <- sr_shapes
+p <- do.call(
+  what = layout, args = c(list(p = p), lay)
+)
+modelVis::mv_config(p = p)
 ```

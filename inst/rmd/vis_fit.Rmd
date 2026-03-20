@@ -6,6 +6,8 @@ output:
     vertical_layout: scroll
     css: !expr system.file("rmd", "style.css", package = "modelVis")
     theme: cosmo
+    includes:
+      in_header: !expr system.file("rmd", "viewport.html", package = "modelVis")
 ---
 
 ```{r setup, include=FALSE}
@@ -19,7 +21,7 @@ knitr::opts_chunk$set(
   fig.width  = 9
 )
 
-# Retrieve data passed from vis_fit()
+# Retrieve data passed from mv_dashboard()
 mv      <- tmp$mv
 comp_mv <- tmp$comp_mv
 
@@ -31,6 +33,15 @@ fleets  <- meta$fleet_names
 sexes   <- meta$sex_names
 areas   <- meta$area_names
 
+# Fleet type: 0 = survey, 1 = commercial
+fleet_type <- if (!is.null(meta$fleet_type)) {
+  meta$fleet_type
+} else {
+  rep(1L, length(fleets))
+}
+comm_fleets   <- fleets[fleet_type == 1]
+survey_fleets <- fleets[fleet_type == 0]
+
 # Flags for conditional sections
 has_len    <- isTRUE(meta$has_length_comps)
 has_disc   <- isTRUE(meta$has_discards)
@@ -38,15 +49,14 @@ has_mcmc   <- isTRUE(meta$has_mcmc)
 has_comp   <- !is.null(comp_mv) && length(comp_mv) > 0
 has_refpts <- !is.null(mv$ref_points)
 has_refcrv <- !is.null(mv$ref_curves)
+has_sr     <- !is.null(mv$sr_params) &&
+              !is.null(mv$sr_params$reca)
 ```
 
-```{r child_biomass, child=system.file("rmd", "child_biomass.Rmd", package = "modelVis")}
+```{r child_data, child=system.file("rmd", "child_data_summary.Rmd", package = "modelVis")}
 ```
 
-```{r child_recruitment, child=system.file("rmd", "child_recruitment.Rmd", package = "modelVis")}
-```
-
-```{r child_mortality, child=system.file("rmd", "child_mortality.Rmd", package = "modelVis")}
+```{r child_glance, child=system.file("rmd", "child_at_a_glance.Rmd", package = "modelVis")}
 ```
 
 ```{r child_index, child=system.file("rmd", "child_index_fits.Rmd", package = "modelVis")}
@@ -61,16 +71,22 @@ has_refcrv <- !is.null(mv$ref_curves)
 ```{r child_len, child=system.file("rmd", "child_len_comps.Rmd", package = "modelVis"), eval=has_len}
 ```
 
-```{r child_sel, child=system.file("rmd", "child_selectivity.Rmd", package = "modelVis"), eval=!is.null(mv$selectivity_at_age)}
+```{r child_recruitment, child=system.file("rmd", "child_recruitment.Rmd", package = "modelVis")}
 ```
 
-```{r child_ref, child=system.file("rmd", "child_reference_pts.Rmd", package = "modelVis"), eval=has_refpts}
+```{r child_sel, child=system.file("rmd", "child_selectivity.Rmd", package = "modelVis"), eval=!is.null(mv$selectivity_at_age)}
 ```
 
 ```{r child_lh, child=system.file("rmd", "child_life_history.Rmd", package = "modelVis"), eval=!is.null(mv$weight_at_age)}
 ```
 
+```{r child_ref, child=system.file("rmd", "child_reference_pts.Rmd", package = "modelVis"), eval=has_refpts}
+```
+
 ```{r child_lik, child=system.file("rmd", "child_likelihood.Rmd", package = "modelVis"), eval=!is.null(mv$likelihood_table)}
+```
+
+```{r child_optim, child=system.file("rmd", "child_optimisation.Rmd", package = "modelVis"), eval=!is.null(mv$fit_diagnostics)}
 ```
 
 ```{r child_diag, child=system.file("rmd", "child_diagnostics.Rmd", package = "modelVis"), eval=has_mcmc}

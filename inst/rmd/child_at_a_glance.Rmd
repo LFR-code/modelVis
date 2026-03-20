@@ -1,0 +1,284 @@
+
+At a Glance
+=====================================
+
+Row
+-------------------------------------
+
+### Spawning Biomass, Recruitment, and Harvest Rate
+
+```{r at_a_glance_stack}
+# Three-panel vertical stack:
+# 1. Spawning biomass with scaled survey indices
+# 2. Recruitment with R0 reference line
+# 3. Legal harvest rate with Umsy + catch bars
+
+# --- Panel 1: SB with index overlay ---
+sb <- mv$spawning_biomass
+p_sb <- plot_ly(data = sb, x = ~year)
+
+has_sb_ci <- "lwr" %in% names(sb) && any(!is.na(sb$lwr))
+if (has_sb_ci) {
+  p_sb <- add_ribbons(
+    p = p_sb,
+    ymin = ~lwr, ymax = ~upr,
+    line = list(width = 0),
+    fillcolor = "rgba(31,119,180,0.2)",
+    showlegend = FALSE, hoverinfo = "skip"
+  )
+}
+p_sb <- add_lines(
+  p = p_sb, y = ~est,
+  line = list(color = "#1f77b4", width = 2),
+  name = "Spawning biomass",
+  hovertemplate = "SB %{x}: %{y:.3g}<extra></extra>"
+)
+
+# Overlay scaled survey indices if vulnerable biomass
+# and index data available
+if (!is.null(mv$vulnerable_biomass) &&
+    !is.null(mv$index_fits)) {
+  sc <- mv_fleet_colours(fleet_names = survey_fleets)
+  for (sf in survey_fleets) {
+    idx_sub <- mv$index_fits[
+      mv$index_fits$fleet == sf &
+        !is.na(mv$index_fits$obs),
+      , drop = FALSE
+    ]
+    vb_sub <- mv$vulnerable_biomass[
+      mv$vulnerable_biomass$fleet == sf,
+      , drop = FALSE
+    ]
+    if (nrow(idx_sub) == 0 || nrow(vb_sub) == 0) next
+    # Scale index to SB scale using mean ratio
+    merged <- merge(
+      x = idx_sub[, c("year", "obs")],
+      y = vb_sub[, c("year", "est")],
+      by = "year"
+    )
+    merged <- merged[merged$obs > 0, , drop = FALSE]
+    if (nrow(merged) == 0) next
+    q_hat <- mean(merged$obs / merged$est, na.rm = TRUE)
+    scaled_idx <- idx_sub$obs / q_hat
+    p_sb <- add_markers(
+      p = p_sb,
+      x = idx_sub$year, y = scaled_idx,
+      name = sf,
+      marker = list(
+        color = sc[sf], size = 5,
+        line = list(color = "white", width = 0.5)
+      ),
+      hovertemplate = paste0(
+        sf, " %{x}: %{y:.3g}<extra></extra>"
+      )
+    )
+  }
+}
+
+lay_sb <- modelVis::mv_layout()
+lay_sb$yaxis$title <- "Spawning biomass"
+lay_sb$showlegend <- TRUE
+
+p_sb <- do.call(
+  what = layout, args = c(list(p = p_sb), lay_sb)
+)
+
+# --- Panel 2: Recruitment ---
+rec <- mv$recruitment
+p_rec <- plot_ly(data = rec, x = ~year)
+
+has_rec_ci <- "lwr" %in% names(rec) &&
+  any(!is.na(rec$lwr))
+if (has_rec_ci) {
+  p_rec <- add_ribbons(
+    p = p_rec,
+    ymin = ~lwr, ymax = ~upr,
+    line = list(width = 0),
+    fillcolor = "rgba(44,160,44,0.2)",
+    showlegend = FALSE, hoverinfo = "skip"
+  )
+}
+p_rec <- add_lines(
+  p = p_rec, y = ~est,
+  line = list(color = "#2ca02c", width = 2),
+  name = "Recruitment", showlegend = FALSE,
+  hovertemplate = "R %{x}: %{y:.3g}<extra></extra>"
+)
+
+# R0 reference line
+rec_shapes <- list()
+if (!is.null(mv$sr_params) &&
+    !is.null(mv$sr_params$R0)) {
+  rec_shapes <- list(list(
+    type = "line",
+    x0 = min(years), x1 = max(years),
+    y0 = mv$sr_params$R0, y1 = mv$sr_params$R0,
+    line = list(
+      color = "#999999", width = 1.5, dash = "dash"
+    )
+  ))
+}
+lay_rec <- modelVis::mv_layout()
+lay_rec$yaxis$title <- "Recruitment"
+lay_rec$shapes <- rec_shapes
+lay_rec$showlegend <- FALSE
+
+p_rec <- do.call(
+  what = layout, args = c(list(p = p_rec), lay_rec)
+)
+
+# --- Panel 3: Legal harvest rate with catch bars ---
+lu <- mv$legal_hr
+p_hr <- plot_ly()
+
+# Catch bars (background)
+if (!is.null(mv$landed_catch_total)) {
+  ct <- mv$landed_catch_total
+  p_hr <- add_bars(
+    p = p_hr,
+    x = ct$year, y = ct$est,
+    marker = list(color = "rgba(200,200,200,0.4)"),
+    name = "Catch", yaxis = "y2",
+    hovertemplate = paste0(
+      "Catch %{x}: %{y:.3g}<extra></extra>"
+    )
+  )
+}
+
+# HR line
+has_hr_ci <- "lwr" %in% names(lu) &&
+  any(!is.na(lu$lwr))
+if (has_hr_ci) {
+  p_hr <- add_ribbons(
+    p = p_hr,
+    x = lu$year,
+    ymin = lu$lwr, ymax = lu$upr,
+    line = list(width = 0),
+    fillcolor = "rgba(31,119,180,0.2)",
+    showlegend = FALSE, hoverinfo = "skip"
+  )
+}
+p_hr <- add_lines(
+  p = p_hr,
+  x = lu$year, y = lu$est,
+  line = list(color = "#1f77b4", width = 2),
+  name = "Legal HR", showlegend = FALSE,
+  hovertemplate = "U %{x}: %{y:.4f}<extra></extra>"
+)
+
+# Umsy reference line
+hr_shapes <- list()
+if (has_refpts && !is.null(mv$ref_points$lUmsy)) {
+  hr_shapes <- list(list(
+    type = "line",
+    x0 = min(years), x1 = max(years),
+    y0 = mv$ref_points$lUmsy,
+    y1 = mv$ref_points$lUmsy,
+    line = list(
+      color = "#999999", width = 1.5, dash = "dash"
+    )
+  ))
+}
+
+lay_hr <- modelVis::mv_layout()
+lay_hr$xaxis$title <- "Year"
+lay_hr$yaxis$title <- "Legal harvest rate"
+lay_hr$yaxis2 <- list(
+  overlaying = "y", side = "right",
+  title = "Catch", showgrid = FALSE
+)
+lay_hr$shapes <- hr_shapes
+lay_hr$showlegend <- FALSE
+lay_hr$barmode <- "overlay"
+
+p_hr <- do.call(
+  what = layout, args = c(list(p = p_hr), lay_hr)
+)
+
+# Stack all three
+p_out <- subplot(
+  p_sb, p_rec, p_hr,
+  nrows = 3, shareX = TRUE,
+  titleX = TRUE, titleY = TRUE,
+  heights = c(0.4, 0.3, 0.3),
+  margin = 0.04
+)
+modelVis::mv_config(p = p_out)
+```
+
+Row {.tabset}
+-------------------------------------
+
+### All Biomass Components
+
+```{r all_bio}
+p <- plot_ly()
+
+# Spawning biomass
+sb <- mv$spawning_biomass
+has_sb_ci2 <- "lwr" %in% names(sb) &&
+  any(!is.na(sb$lwr))
+if (has_sb_ci2) {
+  p <- add_ribbons(
+    p = p, x = sb$year,
+    ymin = sb$lwr, ymax = sb$upr,
+    fillcolor = "rgba(214,39,40,0.15)",
+    line = list(width = 0),
+    showlegend = FALSE, hoverinfo = "skip"
+  )
+}
+p <- add_lines(
+  p = p, x = sb$year, y = sb$est,
+  line = list(color = "#d62728", width = 2),
+  name = "Spawning",
+  hovertemplate = "SB %{x}: %{y:.3g}<extra></extra>"
+)
+
+# Legal biomass
+lb <- mv$legal_biomass
+p <- add_lines(
+  p = p, x = lb$year, y = lb$est,
+  line = list(color = "#1f77b4", width = 2),
+  name = "Legal",
+  hovertemplate = paste0(
+    "Legal B %{x}: %{y:.3g}<extra></extra>"
+  )
+)
+
+# Sublegal biomass
+slb <- mv$sublegal_biomass
+p <- add_lines(
+  p = p, x = slb$year, y = slb$est,
+  line = list(color = "#ff7f0e", width = 2),
+  name = "Sublegal",
+  hovertemplate = paste0(
+    "Sublegal B %{x}: %{y:.3g}<extra></extra>"
+  )
+)
+
+# Total biomass
+if (!is.null(mv$total_biomass)) {
+  tb <- mv$total_biomass
+  p <- add_lines(
+    p = p, x = tb$year, y = tb$est,
+    line = list(
+      color = "#7f7f7f", width = 2, dash = "dot"
+    ),
+    name = "Total",
+    hovertemplate = paste0(
+      "Total B %{x}: %{y:.3g}<extra></extra>"
+    )
+  )
+}
+
+lay <- modelVis::mv_layout()
+lay$xaxis$title <- "Year"
+lay$yaxis$title <- "Biomass"
+lay$showlegend <- TRUE
+lay$updatemenus <- mv_log_linear_buttons()
+
+p <- do.call(
+  what = layout, args = c(list(p = p), lay)
+)
+modelVis::mv_config(p = p)
+```

@@ -9,14 +9,13 @@ Row {.tabset}
 
 ```{r waa_plot}
 waa <- mv$weight_at_age
+sc <- mv_sex_colours(sex_names = unique(waa$sex))
 p <- plot_ly()
 for (sx in unique(waa$sex)) {
   sub <- waa[waa$sex == sx, , drop = FALSE]
-  sc <- mv_sex_colours(sex_names = unique(waa$sex))
   p <- add_lines(
     p = p,
-    x    = sub$age,
-    y    = sub$est,
+    x = sub$age, y = sub$est,
     name = sx,
     line = list(color = sc[sx], width = 2),
     hovertemplate = paste0(
@@ -24,27 +23,28 @@ for (sx in unique(waa$sex)) {
     )
   )
 }
-lay <- modelVis:::.mv_layout()
+lay <- modelVis::mv_layout()
 lay$xaxis$title <- "Age"
 lay$yaxis$title <- "Weight (kg)"
 lay$title <- "Weight at Age"
 lay$showlegend <- TRUE
-p <- do.call(what = layout, args = c(list(p = p), lay))
-modelVis:::.mv_config(p = p)
+p <- do.call(
+  what = layout, args = c(list(p = p), lay)
+)
+modelVis::mv_config(p = p)
 ```
 
 ### Length at Age
 
 ```{r laa_plot, eval=!is.null(mv$length_at_age)}
 laa <- mv$length_at_age
+sc <- mv_sex_colours(sex_names = unique(laa$sex))
 p <- plot_ly()
 for (sx in unique(laa$sex)) {
   sub <- laa[laa$sex == sx, , drop = FALSE]
-  sc <- mv_sex_colours(sex_names = unique(laa$sex))
   p <- add_lines(
     p = p,
-    x    = sub$age,
-    y    = sub$est,
+    x = sub$age, y = sub$est,
     name = sx,
     line = list(color = sc[sx], width = 2),
     hovertemplate = paste0(
@@ -52,32 +52,92 @@ for (sx in unique(laa$sex)) {
     )
   )
 }
-lay <- modelVis:::.mv_layout()
+lay <- modelVis::mv_layout()
 lay$xaxis$title <- "Age"
 lay$yaxis$title <- "Length (cm)"
 lay$title <- "Length at Age"
 lay$showlegend <- TRUE
-p <- do.call(what = layout, args = c(list(p = p), lay))
-modelVis:::.mv_config(p = p)
+p <- do.call(
+  what = layout, args = c(list(p = p), lay)
+)
+modelVis::mv_config(p = p)
+```
+
+### Length-at-Age Distributions
+
+```{r prob_len_age, eval=!is.null(mv$age_length_key)}
+alk <- mv$age_length_key
+sc <- mv_sex_colours(sex_names = sexes)
+
+plot_list <- list()
+for (sx in sexes) {
+  sub <- alk[alk$sex == sx, , drop = FALSE]
+  if (nrow(sub) == 0) next
+
+  # Heatmap of P(length | age)
+  alk_ages <- sort(unique(sub$age))
+  alk_lens <- sort(unique(sub$length))
+  mat <- matrix(
+    data = 0, nrow = length(alk_lens),
+    ncol = length(alk_ages)
+  )
+  for (r in seq_len(nrow(sub))) {
+    ri <- match(x = sub$length[r], table = alk_lens)
+    ci <- match(x = sub$age[r], table = alk_ages)
+    if (!is.na(ri) && !is.na(ci)) {
+      mat[ri, ci] <- sub$est[r]
+    }
+  }
+
+  p <- plot_ly(
+    x = alk_ages, y = alk_lens, z = mat,
+    type = "heatmap",
+    colorscale = "Viridis",
+    hovertemplate = paste0(
+      "Age: %{x}<br>Len: %{y}<br>",
+      "P: %{z:.4f}<extra></extra>"
+    )
+  )
+  lay <- modelVis::mv_layout()
+  lay$annotations <- list(mv_top_label(label = sx))
+  lay$xaxis$title <- "Age"
+  lay$yaxis$title <- "Length"
+  p <- do.call(
+    what = layout, args = c(list(p = p), lay)
+  )
+  plot_list[[length(plot_list) + 1L]] <- p
+}
+
+if (length(plot_list) > 0) {
+  p_out <- subplot(
+    plot_list, nrows = 1,
+    shareY = TRUE, margin = 0.05
+  )
+  p_out <- layout(
+    p = p_out,
+    title = "Length-at-Age Distributions"
+  )
+  modelVis::mv_config(p = p_out)
+}
 ```
 
 ### Maturity at Age
 
 ```{r maa_plot, eval=!is.null(mv$maturity_at_age)}
 maa <- mv$maturity_at_age
-p <- plot_ly(
-  data = maa, x = ~age, y = ~est
-)
+p <- plot_ly(data = maa, x = ~age, y = ~est)
 p <- add_lines(
   p = p,
   line = list(color = "#1f77b4", width = 2),
   showlegend = FALSE,
   hovertemplate = "Age %{x}: %{y:.3f}<extra></extra>"
 )
-lay <- modelVis:::.mv_layout()
+lay <- modelVis::mv_layout()
 lay$xaxis$title <- "Age"
 lay$yaxis$title <- "Proportion mature"
 lay$title <- "Maturity at Age"
-p <- do.call(what = layout, args = c(list(p = p), lay))
-modelVis:::.mv_config(p = p)
+p <- do.call(
+  what = layout, args = c(list(p = p), lay)
+)
+modelVis::mv_config(p = p)
 ```

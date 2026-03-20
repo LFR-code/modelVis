@@ -9,30 +9,12 @@ Row {.tabset}
 
 ```{r fm_trend}
 mv_plot_trend_multi(
-  df     = mv$fishing_mortality,
-  group  = "fleet",
-  ylab   = "Fishing mortality (F)",
-  title  = "Fishing Mortality by Fleet",
+  df      = mv$fishing_mortality,
+  group   = "fleet",
+  ylab    = "Fishing mortality (F)",
+  title   = "Fishing Mortality by Fleet",
   colours = mv_fleet_colours(fleet_names = fleets)
 )
-```
-
-### Exploitation Rates
-
-```{r hr_trend}
-lu_df <- mv$legal_hr
-lu_df$type <- "Legal"
-p <- mv_plot_trend(
-  df     = lu_df,
-  ylab   = "Harvest rate",
-  colour = "#1f77b4",
-  title  = "Exploitation Rates",
-  ref_line = if (has_refpts && !is.null(mv$ref_points$lUmsy))
-    mv$ref_points$lUmsy else NULL,
-  ref_label = if (has_refpts && !is.null(mv$ref_points$lUmsy))
-    "lUmsy" else NULL
-)
-p
 ```
 
 ### Natural Mortality
@@ -41,7 +23,6 @@ p
 nm <- mv$natural_mortality
 if (is.data.frame(nm) && "sex" %in% names(nm) &&
     !"year" %in% names(nm)) {
-  # Constant M by sex
   knitr::kable(
     x = nm,
     caption = "Natural mortality rate",

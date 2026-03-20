@@ -46,12 +46,12 @@ p <- plot_ly(
   ),
   hovertemplate = "%{x}: %{y:.2f}<extra></extra>"
 )
-lay <- modelVis:::.mv_layout()
+lay <- modelVis::mv_layout()
 lay$xaxis$title <- ""
 lay$xaxis$tickangle <- -45
 lay$yaxis$title <- "Negative log-likelihood"
 lay$title <- "Likelihood Component Contributions"
 lay$showlegend <- FALSE
 p <- do.call(what = layout, args = c(list(p = p), lay))
-modelVis:::.mv_config(p = p)
+modelVis::mv_config(p = p)
 ```

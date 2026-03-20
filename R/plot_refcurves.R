@@ -24,6 +24,12 @@ mv_plot_refcurves <- function(ref_curves,
                               title = NULL) {
   cols <- mv_colours(n = 2)
 
+  # Filter infeasible solutions (negative yield/biomass)
+  feasible <- ref_curves$yield >= 0 &
+    ref_curves$biomass >= 0 &
+    ref_curves$legalU >= 0
+  ref_curves <- ref_curves[feasible, , drop = FALSE]
+
   # --- Top panel: yield vs legalU ---
   p_yield <- plot_ly()
   p_yield <- add_lines(
