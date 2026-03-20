@@ -1,4 +1,66 @@
-# modelVis 0.1.1
+# modelVis 0.1.3
+
+## Composition fit plot restyling
+
+* Composition fits now use grey bars (observed) with
+  coloured points + line (predicted), matching the
+  SABplots.R `plotCompFitYrs` convention
+* Applied to `mv_plot_comp_fit()`, `mv_plot_comp_grid()`,
+  `mv_plot_comp_avg()`, and time-averaged grids in
+  age/length comp child Rmd templates
+
+## Prior NLP extraction
+
+* New `prior_table` mv component extracted from
+  sableOpMod (h_nlp, mort_nlp, Fnlp, rec_nlp,
+  SelAnlp_f, SelBnlp_f, etc.)
+* Prior NLP bar chart added to Optimisation tab
+
+## Exported layout and config functions
+
+* `mv_layout()`, `mv_config()`, `mv_kobe_colours()` now
+  exported (were internal `.mv_*` functions)
+* All `:::` calls in Rmd templates replaced with `::`
+* DT dependency added for interactive parameter
+  estimates table
+
+## Tests
+
+* testthat suite: duplicate chunk labels, no `:::`
+  in templates, exported function coverage, tidy helper
+  unit tests, mv object construction (49 tests)
+
+## TODO for next session
+
+* Test fixtures: create small .rds fixtures for
+  testing — MLE-only fit, MCMC fit with posteriors,
+  and eventually one per model type (sableOpMod,
+  SISCA, ms3R). Needed for extractor smoke tests
+  and MCMC diagnostic development.
+* Mobile viewport: JS override added but needs
+  testing on actual device
+* Proportion female fits (low priority, few models
+  use it)
+* Full MCMC diagnostics: Rhat/ESS histograms,
+  prior/posterior density comparisons (needs stanfit
+  object in test fixture)
+* Sample size (N) annotations on yearly comp fit panels
+* `selectivity_at_length` extraction once `sel_lspft`
+  is available in sableOpMod
+* `mv_sim_dashboard()` for MSE/simulation output
+* Verify Pearson residuals match SABplots.R conventions
+* Retrospective visualisations: squid plots for SB,
+  R, rec devs, releases (plotRetroSBt, plotRetroRt,
+  plotRetroRecDev style). Needs retro run output
+  as input — either a list of mv objects or a
+  dedicated retro extractor.
+* Batch/scenario comparison visualisations: overlay
+  time series, ref points, selectivity across model
+  runs (plotBatchMt, plotComparisonRefPtsU style).
+  May use mv_plot_compare or need new functions.
+* Consider GitHub Actions CI workflow
+
+# modelVis 0.1.2
 
 ## Dashboard restructure
 
