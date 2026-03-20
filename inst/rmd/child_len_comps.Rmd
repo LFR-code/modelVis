@@ -39,13 +39,24 @@ for (fl in len_fleets) {
     }
 
     p <- plot_ly()
+    # Observed: grey bars
     p <- add_bars(
       p = p,
-      x = avg_lens, y = as.numeric(avg_pred),
+      x = avg_lens, y = as.numeric(avg_obs),
       marker = list(
-        color = fc[fl],
+        color = "rgba(180,180,180,0.6)",
         line = list(color = "white", width = 0.5)
       ),
+      showlegend = FALSE,
+      hovertemplate = paste0(
+        "Len %{x}: %{y:.4f}<extra>Obs</extra>"
+      )
+    )
+    # Predicted: coloured points + line
+    p <- add_lines(
+      p = p,
+      x = avg_lens, y = as.numeric(avg_pred),
+      line = list(color = fc[fl], width = 1.5),
       showlegend = FALSE,
       hovertemplate = paste0(
         "Len %{x}: %{y:.4f}<extra>Pred</extra>"
@@ -53,12 +64,13 @@ for (fl in len_fleets) {
     )
     p <- add_markers(
       p = p,
-      x = avg_lens, y = as.numeric(avg_obs),
-      marker = list(color = "black", size = 4),
+      x = avg_lens, y = as.numeric(avg_pred),
+      marker = list(
+        color = fc[fl], size = 4,
+        line = list(color = "white", width = 0.5)
+      ),
       showlegend = FALSE,
-      hovertemplate = paste0(
-        "Len %{x}: %{y:.4f}<extra>Obs</extra>"
-      )
+      hoverinfo = "skip"
     )
 
     lay <- modelVis::mv_layout()

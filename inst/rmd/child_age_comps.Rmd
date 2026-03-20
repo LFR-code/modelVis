@@ -42,33 +42,38 @@ for (fl in age_fleets) {
     }
 
     p <- plot_ly()
-    # Predicted as bars
+    # Observed: grey bars
     p <- add_bars(
       p = p,
-      x = avg_ages, y = as.numeric(avg_pred),
+      x = avg_ages, y = as.numeric(avg_obs),
       marker = list(
-        color = fc[fl],
+        color = "rgba(180,180,180,0.6)",
         line = list(color = "white", width = 0.5)
       ),
-      name = "Predicted",
+      showlegend = FALSE,
+      hovertemplate = paste0(
+        "Age %{x}: %{y:.4f}<extra>Obs</extra>"
+      )
+    )
+    # Predicted: coloured points + line
+    p <- add_lines(
+      p = p,
+      x = avg_ages, y = as.numeric(avg_pred),
+      line = list(color = fc[fl], width = 1.5),
       showlegend = FALSE,
       hovertemplate = paste0(
         "Age %{x}: %{y:.4f}<extra>Pred</extra>"
       )
     )
-    # Observed as points
     p <- add_markers(
       p = p,
-      x = avg_ages, y = as.numeric(avg_obs),
+      x = avg_ages, y = as.numeric(avg_pred),
       marker = list(
-        color = "black", size = 4,
-        symbol = "circle"
+        color = fc[fl], size = 4,
+        line = list(color = "white", width = 0.5)
       ),
-      name = "Observed",
       showlegend = FALSE,
-      hovertemplate = paste0(
-        "Age %{x}: %{y:.4f}<extra>Obs</extra>"
-      )
+      hoverinfo = "skip"
     )
 
     lay <- modelVis::mv_layout()
