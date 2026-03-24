@@ -1,0 +1,434 @@
+---
+title: "Writing an Extractor"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Writing an Extractor}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>"
+)
+```
+
+## Overview
+
+To connect a new stock assessment model to modelVis,
+you write a single S3 method: `extract.mymodel()`.
+This method lives in **your model package** (not in
+modelVis) and converts your model's output into a
+standardised `mv` object.
+
+The workflow:
+
+1. Define `extract.mymodel()` in your model package
+2. Register the S3 method in your NAMESPACE
+3. Optionally register a fingerprint for auto-detection
+4. Users call `mv_dashboard()` or `extract()` --- S3
+   dispatch routes to your method
+
+## Step 1: Define the method
+
+Your method must accept `fit` (the model output) and
+`label` (a character string) and return an `mv` object
+via `new_mv()`.
+
+Here is a minimal skeleton:
+
+```{r skeleton, eval = FALSE}
+#' Extract mv object from MyModel
+#'
+#' @param fit MyModel output list
+#' @param label Character label for this run
+#' @param ... Additional arguments (unused)
+#' @return An mv object
+#' @export
+extract.mymodel <- function(fit, label = "", ...) {
+
+  # 1. Pull out dimensions and names
+  years      <- fit$years
+  ages       <- fit$ages
+  fleetNames <- fit$fleet_names
+
+  # 2. Build metadata
+  meta <- list(
+    model_type       = "mymodel",
+    label            = label,
+    years            = years,
+    ages             = ages,
+    sex_names        = "Combined",
+    fleet_names      = fleetNames,
+    area_names       = "All",
+    has_length_comps = FALSE,
+    has_discards     = FALSE,
+    has_mcmc         = FALSE,
+    fleet_type       = fit$fleet_type
+  )
+
+  # 3. Reshape data into standard data.frames
+  spawning_biomass <- data.frame(
+    year = years,
+    est  = fit$ssb
+  )
+
+  recruitment <- data.frame(
+    year = years,
+    est  = fit$rec
+  )
+
+  # 4. Assemble
+  modelVis::new_mv(
+    meta             = meta,
+    spawning_biomass = spawning_biomass,
+    recruitment      = recruitment
+  )
+}
+```
+
+## Step 2: Component conventions
+
+Each data component has required columns. NULL
+components are permitted and cause their dashboard
+sections to be skipped.
+
+### Time-series components
+
+Used for: `spawning_biomass`, `recruitment`,
+`rec_devs`, `legal_hr`, `total_biomass`,
+`legal_biomass`, `sublegal_biomass`.
+
+| Column | Required | Description           |
+|--------|----------|-----------------------|
+| `year` | yes      | Integer year          |
+| `est`  | yes      | Point estimate        |
+| `lwr`  | no       | Lower CI bound        |
+| `upr`  | no       | Upper CI bound        |
+
+Use `mv_ensure_ci()` to add `NA` CI columns if your
+model does not produce uncertainty intervals:
+
+```{r ensure-ci, eval = FALSE}
+spawning_biomass <- modelVis::mv_ensure_ci(
+  df = spawning_biomass
+)
+```
+
+### Fit components
+
+Used for: `index_fits`, `catch_fits`, `discard_fits`.
+
+| Column     | Required | Description            |
+|------------|----------|------------------------|
+| `year`     | yes      | Integer year           |
+| `obs`      | yes      | Observed value         |
+| `pred`     | yes      | Predicted value        |
+| `fleet`    | no       | Fleet name             |
+| `residual` | no       | Log residual           |
+
+### Composition fits
+
+Used for: `age_comp_fits`, `len_comp_fits`.
+
+| Column     | Required | Description            |
+|------------|----------|------------------------|
+| `age`/`length` | yes | Bin value              |
+| `year`     | yes      | Integer year           |
+| `obs`      | yes      | Observed proportion    |
+| `pred`     | yes      | Predicted proportion   |
+| `fleet`    | yes      | Fleet name             |
+| `sex`      | no       | Sex label              |
+
+### Selectivity
+
+| Column  | Required | Description            |
+|---------|----------|------------------------|
+| `age`   | yes      | Age class              |
+| `sex`   | no       | Sex label              |
+| `est`   | yes      | Selectivity value      |
+| `fleet` | yes      | Fleet name             |
+
+### Reference points
+
+A named list. Common elements:
+
+```{r refpts, eval = FALSE}
+ref_points <- list(
+  Fmsy  = 0.18,
+  SBmsy = 25.3,
+  lUmsy = 0.16,
+  lMSY  = 4.5,
+  B0    = 55.0,
+  R0    = 10.0
+)
+```
+
+### Reference curves
+
+A data.frame with columns `legalU`, `yield`, and
+`biomass` for equilibrium yield/biomass as a function
+of legal harvest rate.
+
+### Stock-recruitment
+
+| Column        | Required | Description        |
+|---------------|----------|--------------------|
+| `ssb`         | yes      | Spawning biomass   |
+| `recruitment` | yes      | Recruitment        |
+| `year`        | yes      | Integer year       |
+
+## Step 3: Using tidy helpers
+
+Model arrays rarely match the long-format data.frames
+that plot functions expect. modelVis exports helpers
+for common reshaping tasks.
+
+### Vectors to time-series
+
+```{r tidy-ts}
+library(modelVis)
+
+ssb_vec <- c(50, 48, 45, 43, 44, 46)
+
+mv_tidy_ts(
+  x         = ssb_vec,
+  years     = 2000:2005,
+  value_col = "est"
+)
+```
+
+### Matrices to long format
+
+```{r tidy-mat}
+# Selectivity: ages (rows) x fleets (cols)
+sel_mat <- matrix(
+  data     = c(0.1, 0.5, 0.9, 1.0,
+               0.2, 0.7, 1.0, 1.0),
+  nrow     = 4,
+  ncol     = 2,
+  dimnames = list(1:4, c("trawl", "survey"))
+)
+
+mv_tidy_mat(
+  x          = sel_mat,
+  row_name   = "age",
+  col_name   = "fleet",
+  value_col  = "est"
+)
+```
+
+### 3D arrays
+
+```{r tidy-3d}
+# Catch-at-age: ages x fleets x years
+caa <- array(
+  data     = runif(n = 24),
+  dim      = c(4, 2, 3),
+  dimnames = list(
+    age   = 1:4,
+    fleet = c("trawl", "survey"),
+    year  = 2020:2022
+  )
+)
+
+head(mv_tidy_3d(
+  x          = caa,
+  dim_names  = c("age", "fleet", "year"),
+  value_col  = "est"
+))
+```
+
+### MCMC posteriors to CI time-series
+
+When MCMC samples are available, `mv_quantile_ts()`
+computes the median and credible interval:
+
+```{r quantile-ts}
+# Fake posterior: 500 iterations x 6 years
+post_mat <- matrix(
+  data = rnorm(n = 3000, mean = 50, sd = 5),
+  nrow = 500,
+  ncol = 6
+)
+
+mv_quantile_ts(
+  x     = post_mat,
+  years = 2000:2005,
+  probs = c(0.025, 0.5, 0.975)
+)
+```
+
+## Step 4: Register the S3 method
+
+In your model package's `R/extract_mv.R` (or similar),
+use roxygen2 to export the method:
+
+```{r roxygen, eval = FALSE}
+#' @export
+extract.mymodel <- function(fit, label = "", ...) {
+ # ...
+}
+```
+
+Then in your NAMESPACE (generated by roxygen2):
+
+```
+S3method(extract, mymodel)
+```
+
+Your package must list `modelVis` in `Suggests:` (not
+`Imports:`), and guard the method body with
+`requireNamespace()`:
+
+```{r guard, eval = FALSE}
+extract.mymodel <- function(fit, label = "", ...) {
+  if (!requireNamespace("modelVis", quietly = TRUE))
+    stop(
+      "Package 'modelVis' is required. ",
+      "Install from LFR-code/modelVis."
+    )
+  # ... build components ...
+  modelVis::new_mv(meta = meta, ...)
+}
+```
+
+## Step 5: Auto-detection (optional)
+
+modelVis can auto-detect your model type from an
+unclassed list by checking structural fingerprints.
+To register a fingerprint, submit a pull request
+adding a check to `.detect_model_type()` in
+`R/extract.R`:
+```{r fingerprint, eval = FALSE}
+.detect_model_type <- function(fit) {
+  if (!is.list(fit)) return(NULL)
+  # Existing: sableOpMod
+  if (!is.null(fit$repOpt) && !is.null(fit$data))
+    return("sableOpMod")
+  # New: mymodel
+  if (!is.null(fit$mymodel_field))
+    return("mymodel")
+  NULL
+}
+```
+
+With auto-detection, users do not need to manually set
+the class before calling `extract()`.
+
+## Worked example: SISCA
+
+The SISCA stock assessment model registers
+`extract.sisca()` in its own package. Key patterns:
+
+### Looping over populations and gears
+
+SISCA stores arrays indexed by population, gear, and
+time. The extractor loops over these dimensions and
+builds row-list data.frames:
+
+```{r sisca-loop, eval = FALSE}
+idx_rows <- list()
+for (p in seq_len(nP))
+  for (g in seq_len(nG)) {
+    obs_vec  <- as.numeric(data$I_pgt[p, g, ])
+    pred_vec <- as.numeric(
+      rep$qhat_pg[p, g] * rep$vulnB_pgt[p, g, ]
+    )
+    obs_vec[obs_vec < 0] <- NA
+    residual <- ifelse(
+      test = !is.na(obs_vec) & obs_vec > 0 &
+             pred_vec > 0,
+      yes  = log(obs_vec) - log(pred_vec),
+      no   = NA_real_
+    )
+    idx_rows[[length(idx_rows) + 1]] <- data.frame(
+      year     = assessYrs,
+      obs      = obs_vec,
+      pred     = pred_vec,
+      fleet    = fleetNames[g],
+      area     = areaNames[p],
+      residual = residual
+    )
+  }
+index_fits <- do.call(
+  what = rbind, args = idx_rows
+)
+```
+
+### Deriving fleet type from the control file
+
+Fleet type (fishery vs survey) is read from the
+control file, not hardcoded:
+
+```{r sisca-fleet, eval = FALSE}
+fleetType <- rep(1L, nG)
+fleetType[ctl$data$fleetType == 0] <- 0L
+```
+
+### Normalising age compositions
+
+Observed and predicted proportions are normalised
+before storage:
+
+```{r sisca-comp, eval = FALSE}
+obs_sum <- sum(obs_vec, na.rm = TRUE)
+if (obs_sum > 0) obs_vec <- obs_vec / obs_sum
+pred_sum <- sum(pred_vec, na.rm = TRUE)
+if (pred_sum > 0) pred_vec <- pred_vec / pred_sum
+```
+
+### Conditional components
+
+Components that may not exist (e.g., reference points
+from an optional post-processing step) are set to NULL
+rather than omitted:
+
+```{r sisca-conditional, eval = FALSE}
+ref_points <- NULL
+if (!is.null(fit$refPts)) {
+  rp <- fit$refPts
+  ref_points <- list(
+    Fmsy  = rp$FmsyRefPts$Fmsy_p[1],
+    SBmsy = rp$FmsyRefPts$SBeqFmsy_p[1],
+    lUmsy = rp$FmsyRefPts$Umsy_p[1],
+    B0    = rep$B0_p[1],
+    R0    = rep$R0_p[1]
+  )
+}
+```
+
+## Testing your extractor
+
+A basic test suite should verify:
+
+1. The method returns an `mv` object
+2. Required metadata fields are present
+3. Key components have the expected columns
+4. The dashboard renders without error
+
+```{r test, eval = FALSE}
+test_that("extract.mymodel returns valid mv", {
+  fit <- readRDS(file = "test_fit.rds")
+  mv  <- extract(fit = fit, label = "test")
+
+  expect_s3_class(object = mv, class = "mv")
+  expect_equal(
+    object   = mv$meta$model_type,
+    expected = "mymodel"
+  )
+  expect_true(
+    object = all(
+      c("year", "est") %in%
+        names(mv$spawning_biomass)
+    )
+  )
+  expect_true(
+    object = all(
+      c("year", "obs", "pred") %in%
+        names(mv$index_fits)
+    )
+  )
+})
+```

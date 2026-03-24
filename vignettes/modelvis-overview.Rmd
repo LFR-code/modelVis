@@ -1,0 +1,233 @@
+---
+title: "Introduction to modelVis"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to modelVis}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  fig.width  = 7,
+  fig.height = 4
+)
+```
+
+## What is modelVis?
+
+modelVis generates interactive HTML dashboards for
+fisheries stock assessment model diagnostics. It
+decouples visualisation from modelling by defining a
+standard intermediate object (the `mv` object) that any
+model package can produce.
+
+The pipeline is:
+
+```
+model output --> extract() --> mv object
+                                 |
+                      +----------+---------+
+                      |                    |
+              mv_dashboard()      mv_plot_*() functions
+              (full dashboard)   (individual plots)
+```
+
+Each model package writes one `extract.mymodel()` method
+to convert its output into an `mv` object. modelVis
+handles everything downstream.
+
+## Installation
+
+```{r install, eval = FALSE}
+devtools::install_github("LFR-code/modelVis")
+```
+
+## The mv object
+
+An `mv` object is an S3 list with class `"mv"`. It
+contains:
+- **meta** --- a required metadata list (model type,
+  label, years, ages, sex names, fleet names, area
+  names, and flags)
+- **data components** --- named data.frames following
+  specific column conventions (all optional; NULL
+  components cause their dashboard sections to be
+  skipped)
+
+### Metadata fields
+
+| Field              | Type      | Description           |
+|--------------------|-----------|-----------------------|
+| `model_type`       | character | Model class name      |
+| `label`            | character | Run label             |
+| `years`            | integer   | Assessment years      |
+| `ages`             | integer   | Age classes           |
+| `sex_names`        | character | Sex labels            |
+| `fleet_names`      | character | Fleet labels          |
+| `area_names`       | character | Area labels           |
+| `has_length_comps` | logical   | Length data flag       |
+| `has_discards`     | logical   | Discard data flag     |
+| `has_mcmc`         | logical   | MCMC posterior flag   |
+| `fleet_type`       | integer   | 1 = fishery, 0 = survey |
+
+### Data component conventions
+
+**Time-series** (spawning biomass, recruitment,
+harvest rate, etc.): must have `year` and `est`
+columns. Optional `lwr` and `upr` columns trigger
+confidence interval ribbons.
+
+**Fit components** (index fits, catch fits): must have
+`year`, `obs`, and `pred` columns. Optional `fleet`
+column for faceting and `residual` for diagnostics.
+
+**Composition fits** (age, length): must have a bin
+column (`age` or `length`), `year`, `obs`, `pred`,
+and `fleet`.
+
+**Reference points**: a named list with elements like
+`Fmsy`, `SBmsy`, `lUmsy`, `B0`, `R0`.
+
+### Creating an mv object
+
+The `new_mv()` constructor validates required metadata
+and column names:
+
+```{r new-mv}
+library(modelVis)
+
+mv <- new_mv(
+  meta = list(
+    model_type  = "demo",
+    label       = "Minimal example",
+    years       = 2000:2005,
+    ages        = 1:5,
+    sex_names   = "Combined",
+    fleet_names = "survey1",
+    area_names  = "All"
+  ),
+  spawning_biomass = data.frame(
+    year = 2000:2005,
+    est  = c(50, 48, 45, 43, 44, 46)
+  )
+)
+
+print(mv)
+```
+
+### Inspecting an mv object
+
+```{r summary}
+summary(mv)
+```
+
+## Loading the example mv object
+
+modelVis ships with a synthetic example for use in
+vignettes and testing:
+
+```{r load-example}
+example_mv <- readRDS(
+  file = system.file(
+    "extdata", "example_mv.rds",
+    package = "modelVis"
+  )
+)
+print(example_mv)
+```
+
+## Generating a dashboard
+
+The `mv_dashboard()` function is the main entry point
+for full dashboards. It takes a raw model fit object,
+calls `extract()` internally, and renders an interactive
+flexdashboard.
+
+```{r dashboard, eval = FALSE}
+# From a model fit object (calls extract() internally)
+mv_dashboard(
+  fit        = model_reports,
+  label      = "Base case 2025",
+  output_file = "diagnostics.html"
+)
+
+# Or pass NULL for output_file to open an interactive
+# viewer in RStudio
+mv_dashboard(fit = model_reports, label = "Base case")
+```
+
+For model comparison, pass additional fits via the
+`comp` argument:
+
+```{r compare, eval = FALSE}
+mv_dashboard(
+  fit   = base_reports,
+  label = "Base case",
+  comp  = list(
+    "Low M"  = lowM_reports,
+    "High h" = highH_reports
+  ),
+  output_file = "comparison.html"
+)
+```
+
+## Using individual plot functions
+
+Every `mv_plot_*()` function accepts standard
+data.frames and returns a plotly object. You can use
+them independently of the dashboard:
+```{r individual-plot}
+mv_plot_trend(
+  df    = example_mv$spawning_biomass,
+  ylab  = "Spawning biomass (kt)",
+  title = "Spawning Biomass"
+)
+```
+
+See `vignette("modelvis-plots")` for a full gallery.
+
+## Writing an extractor for your model
+
+To connect a new model to modelVis, you write a single
+S3 method: `extract.mymodel()`. This method reshapes
+your model output into `new_mv()` format.
+
+See `vignette("modelvis-extractor")` for a step-by-step
+guide.
+
+## Colour palettes
+
+modelVis provides consistent colour palettes:
+
+- `mv_colours(n)` --- general-purpose palette (10
+  colours, interpolates beyond 10)
+- `mv_fleet_colours(fleet_names)` --- named vector
+  keyed to fleet names
+- `mv_sex_colours(sex_names)` --- standard sex colours
+  (Male = blue, Female = red, Combined = grey)
+- `mv_kobe_colours()` --- status zone quadrant colours
+
+```{r colours}
+mv_colours(n = 5)
+mv_sex_colours(sex_names = c("Male", "Female"))
+```
+
+## Tidy helpers for extractors
+
+modelVis exports helper functions for converting model
+arrays into the long-format data.frames that plot
+functions expect:
+
+| Function         | Input               | Output         |
+|------------------|---------------------|----------------|
+| `mv_tidy_ts()`   | named vector        | year + est     |
+| `mv_tidy_mat()`  | matrix              | row + col + est|
+| `mv_tidy_3d()`   | 3D array            | long data.frame|
+| `mv_tidy_4d()`   | 4D array            | long data.frame|
+| `mv_tidy_5d()`   | 5D array            | long data.frame|
+| `mv_quantile_ts()` | MCMC matrix       | year + est + CI|
+| `mv_ensure_ci()` | data.frame          | adds lwr/upr   |
+| `mv_year_seq()`  | fYear + nT          | integer vector |

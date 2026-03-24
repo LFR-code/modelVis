@@ -1,0 +1,378 @@
+---
+title: "Plot Gallery"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Plot Gallery}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse   = TRUE,
+  comment    = "#>",
+  fig.width  = 7,
+  fig.height = 4
+)
+```
+
+## Setup
+
+All examples use the bundled synthetic `mv` object:
+
+```{r load}
+library(modelVis)
+
+mv <- readRDS(
+  file = system.file(
+    "extdata", "example_mv.rds",
+    package = "modelVis"
+  )
+)
+summary(mv)
+```
+
+## Time-series trends
+
+### Single trend with CI ribbon
+
+`mv_plot_trend()` draws a line with an optional
+confidence interval ribbon when `lwr` and `upr`
+columns are present.
+
+```{r trend-sb, fig.cap = "Spawning biomass with 95\\% CI ribbon."}
+mv_plot_trend(
+  df    = mv$spawning_biomass,
+  ylab  = "Spawning biomass (kt)",
+  title = "Spawning Biomass"
+)
+```
+
+### Customising colour and reference lines
+
+```{r trend-rec, fig.cap = "Recruitment with a reference line at R0."}
+mv_plot_trend(
+  df        = mv$recruitment,
+  ylab      = "Recruitment (thousands)",
+  title     = "Recruitment",
+  colour    = "#2ca02c",
+  ref_line  = mv$sr_params$R0,
+  ref_label = "R0"
+)
+```
+
+### Harvest rate (no CI)
+
+When `lwr`/`upr` are `NA`, the ribbon is suppressed
+automatically:
+
+```{r trend-hr, fig.cap = "Total harvest rate time series."}
+mv_plot_trend(
+  df     = mv$legal_hr,
+  ylab   = "Harvest rate",
+  title  = "Legal Harvest Rate",
+  colour = "#d62728"
+)
+```
+
+### Log/linear toggle
+
+Set `log_buttons = TRUE` to add a toggle between
+linear and log y-axis scales:
+
+```{r trend-log, fig.cap = "Spawning biomass with log/linear toggle buttons."}
+mv_plot_trend(
+  df          = mv$spawning_biomass,
+  ylab        = "Spawning biomass (kt)",
+  title       = "Log/Linear Toggle Demo",
+  log_buttons = TRUE
+)
+```
+
+### Multiple grouped trends
+
+`mv_plot_trend_multi()` overlays lines for each level
+of a grouping column:
+
+```{r trend-multi, fig.cap = "Index predictions by fleet."}
+idx_trend <- mv$index_fits[
+  , c("year", "fleet", "pred"), drop = FALSE
+]
+names(idx_trend)[names(idx_trend) == "pred"] <- "est"
+
+mv_plot_trend_multi(
+  df    = idx_trend,
+  group = "fleet",
+  ylab  = "Predicted index",
+  title = "Predicted Indices by Fleet"
+)
+```
+
+## Observed vs predicted
+
+### Single panel
+
+`mv_plot_obs_pred()` shows observed markers and a
+predicted line:
+
+```{r obs-pred, fig.cap = "Survey index fit."}
+surv <- mv$index_fits[
+  mv$index_fits$fleet == "survey1",
+  ,
+  drop = FALSE
+]
+mv_plot_obs_pred(
+  df    = surv,
+  ylab  = "Survey index",
+  title = "Survey 1 Index Fit"
+)
+```
+
+### Faceted by fleet
+
+`mv_plot_obs_pred_facet()` creates a vertically stacked
+subplot for each fleet:
+
+```{r obs-pred-facet, fig.height = 8, fig.cap = "Index fits faceted by fleet."}
+mv_plot_obs_pred_facet(
+  df    = mv$index_fits,
+  facet = "fleet",
+  ylab  = "Index"
+)
+```
+
+## Age composition fits
+
+### Grid of annual fits
+
+`mv_plot_comp_grid()` shows observed (grey bars) and
+predicted (coloured line + points) proportions at age
+for the most recent years:
+
+```{r comp-grid, fig.height = 8, fig.cap = "Age composition fits for fishery 1 (most recent 16 years)."}
+f1_comps <- mv$age_comp_fits[
+  mv$age_comp_fits$fleet == "fishery1",
+  ,
+  drop = FALSE
+]
+mv_plot_comp_grid(
+  df             = f1_comps,
+  bin_col        = "age",
+  years_per_page = 16,
+  ncol           = 4
+)
+```
+
+### Average composition
+
+`mv_plot_comp_avg()` averages observed and predicted
+compositions across all years:
+
+```{r comp-avg, fig.cap = "Time-averaged age composition for fishery 1."}
+mv_plot_comp_avg(
+  df      = f1_comps,
+  bin_col = "age",
+  ylab    = "Mean proportion",
+  title   = "Fishery 1 -- Average Age Composition"
+)
+```
+
+### Single year
+
+`mv_plot_comp_fit()` shows a single year:
+
+```{r comp-single, fig.cap = "Age composition fit for fishery 1 in 2020."}
+yr2020 <- f1_comps[
+  f1_comps$year == 2020,
+  ,
+  drop = FALSE
+]
+mv_plot_comp_fit(
+  df      = yr2020,
+  bin_col = "age",
+  title   = "Fishery 1 -- 2020"
+)
+```
+
+## Residual diagnostics
+
+### Bubble plot
+
+`mv_plot_bubble()` shows residuals as bubbles sized by
+absolute value and coloured by sign (red = positive,
+blue = negative):
+
+```{r bubble, fig.cap = "Age composition residual bubble plot for survey 1."}
+surv_comps <- mv$age_comp_fits[
+  mv$age_comp_fits$fleet == "survey1",
+  ,
+  drop = FALSE
+]
+surv_comps$residual <- log(surv_comps$obs) -
+  log(surv_comps$pred)
+mv_plot_bubble(
+  df    = surv_comps,
+  x_col = "year",
+  y_col = "age",
+  title = "Survey 1 -- Composition Residuals"
+)
+```
+
+### Four-panel residual diagnostics
+
+`mv_plot_resid_panel()` creates a 2$\times$2 subplot
+with: residuals vs year, residuals vs predicted, QQ
+plot, and histogram:
+
+```{r resid-panel, fig.height = 6, fig.cap = "Index residual diagnostics for survey 1."}
+surv_idx <- mv$index_fits[
+  mv$index_fits$fleet == "survey1",
+  ,
+  drop = FALSE
+]
+mv_plot_resid_panel(
+  df    = surv_idx,
+  title = "Survey 1 -- Index Residuals"
+)
+```
+
+## Selectivity at age
+
+`mv_plot_selectivity()` overlays selectivity curves for
+each fleet:
+
+```{r selectivity, fig.cap = "Estimated selectivity-at-age by fleet."}
+mv_plot_selectivity(
+  df    = mv$selectivity_at_age,
+  ylab  = "Selectivity",
+  title = "Selectivity at Age"
+)
+```
+
+For sex-structured models, set `by_sex = TRUE` to
+create side-by-side panels.
+
+## Stock-recruitment
+
+`mv_plot_sr()` creates a scatter of recruitment vs
+spawning biomass, with points coloured by year:
+
+```{r sr, fig.cap = "Stock-recruitment relationship."}
+mv_plot_sr(
+  df    = mv$stock_recruit,
+  ylab  = "Recruitment (thousands)",
+  xlab  = "Spawning biomass (kt)",
+  title = "Stock-Recruitment"
+)
+```
+
+Set `show_labels = TRUE` to annotate every 5th year.
+
+## Kobe phase plot
+
+`mv_plot_kobe()` shows stock status relative to
+reference points in a four-quadrant phase plot:
+
+```{r kobe, fig.cap = "Kobe phase plot showing stock trajectory."}
+b_ratio <- mv$spawning_biomass$est /
+  mv$ref_points$SBmsy
+f_ratio <- mv$legal_hr$est /
+  mv$ref_points$Fmsy
+
+mv_plot_kobe(
+  biomass   = b_ratio,
+  mortality = f_ratio,
+  years     = mv$meta$years,
+  xlab      = "B/Bmsy",
+  ylab      = "U/Umsy",
+  title     = "Kobe Phase Plot"
+)
+```
+
+The terminal year is highlighted with a red star.
+
+## Equilibrium reference curves
+
+`mv_plot_refcurves()` shows equilibrium yield and
+biomass as a function of harvest rate, with reference
+point annotations:
+
+```{r refcurves, fig.height = 6, fig.cap = "Equilibrium yield and biomass curves."}
+mv_plot_refcurves(
+  ref_curves = mv$ref_curves,
+  ref_points = mv$ref_points,
+  title      = "Equilibrium Reference Curves"
+)
+```
+
+## Age $\times$ year heatmap
+
+`mv_plot_surface()` renders an age-by-year heatmap:
+
+```{r surface, fig.cap = "Predicted age composition heatmap for fishery 1."}
+surf_df <- f1_comps[
+  , c("year", "age", "pred"), drop = FALSE
+]
+names(surf_df)[names(surf_df) == "pred"] <- "est"
+mv_plot_surface(
+  df    = surf_df,
+  ylab  = "Age",
+  title = "Fishery 1 -- Predicted Composition"
+)
+```
+
+## Model comparison
+
+`mv_plot_compare()` overlays a time-series component
+from multiple `mv` objects. Each object's `meta$label`
+is used as the legend entry.
+
+```{r compare, fig.cap = "Spawning biomass comparison between two scenarios."}
+# Create a second mv with shifted biomass
+mv2_sb <- mv$spawning_biomass
+mv2_sb$est <- mv2_sb$est * 1.15
+mv2_sb$lwr <- mv2_sb$lwr * 1.15
+mv2_sb$upr <- mv2_sb$upr * 1.15
+
+mv2 <- new_mv(
+  meta = modifyList(
+    x   = mv$meta,
+    val = list(label = "High productivity")
+  ),
+  spawning_biomass = mv2_sb,
+  recruitment      = mv$recruitment
+)
+
+mv_plot_compare(
+  mv_list   = list(mv, mv2),
+  component = "spawning_biomass",
+  ylab      = "Spawning biomass (kt)",
+  title     = "Scenario Comparison"
+)
+```
+
+## Theming and layout
+
+All plots use `mv_layout()` for consistent styling.
+You can modify the returned plotly object directly:
+
+```{r custom-layout}
+p <- mv_plot_trend(
+  df   = mv$spawning_biomass,
+  ylab = "SB (kt)"
+)
+
+# Override with plotly::layout()
+p <- plotly::layout(
+  p = p,
+  title = list(
+    text = "Custom Title",
+    font = list(size = 18, color = "#333")
+  ),
+  paper_bgcolor = "#f8f8f8"
+)
+p
+```
+
+Use `mv_config()` to customise the plotly modebar
+(the toolbar that appears on hover).
