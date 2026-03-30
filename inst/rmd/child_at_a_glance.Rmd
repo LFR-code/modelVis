@@ -145,26 +145,28 @@ if (!is.null(mv$landed_catch_total)) {
   )
 }
 
-# HR line
-has_hr_ci <- "lwr" %in% names(lu) &&
-  any(!is.na(lu$lwr))
-if (has_hr_ci) {
-  p_hr <- add_ribbons(
+# HR line (guard against NULL legal_hr)
+if (!is.null(lu)) {
+  has_hr_ci <- "lwr" %in% names(lu) &&
+    any(!is.na(lu$lwr))
+  if (has_hr_ci) {
+    p_hr <- add_ribbons(
+      p = p_hr,
+      x = lu$year,
+      ymin = lu$lwr, ymax = lu$upr,
+      line = list(width = 0),
+      fillcolor = "rgba(31,119,180,0.2)",
+      showlegend = FALSE, hoverinfo = "skip"
+    )
+  }
+  p_hr <- add_lines(
     p = p_hr,
-    x = lu$year,
-    ymin = lu$lwr, ymax = lu$upr,
-    line = list(width = 0),
-    fillcolor = "rgba(31,119,180,0.2)",
-    showlegend = FALSE, hoverinfo = "skip"
+    x = lu$year, y = lu$est,
+    line = list(color = "#1f77b4", width = 2),
+    name = "Legal HR", showlegend = FALSE,
+    hovertemplate = "U %{x}: %{y:.4f}<extra></extra>"
   )
 }
-p_hr <- add_lines(
-  p = p_hr,
-  x = lu$year, y = lu$est,
-  line = list(color = "#1f77b4", width = 2),
-  name = "Legal HR", showlegend = FALSE,
-  hovertemplate = "U %{x}: %{y:.4f}<extra></extra>"
-)
 
 # Umsy reference line
 hr_shapes <- list()
@@ -235,26 +237,30 @@ p <- add_lines(
 )
 
 # Legal biomass
-lb <- mv$legal_biomass
-p <- add_lines(
-  p = p, x = lb$year, y = lb$est,
-  line = list(color = "#1f77b4", width = 2),
-  name = "Legal",
-  hovertemplate = paste0(
-    "Legal B %{x}: %{y:.3g}<extra></extra>"
+if (!is.null(mv$legal_biomass)) {
+  lb <- mv$legal_biomass
+  p <- add_lines(
+    p = p, x = lb$year, y = lb$est,
+    line = list(color = "#1f77b4", width = 2),
+    name = "Legal",
+    hovertemplate = paste0(
+      "Legal B %{x}: %{y:.3g}<extra></extra>"
+    )
   )
-)
+}
 
 # Sublegal biomass
-slb <- mv$sublegal_biomass
-p <- add_lines(
-  p = p, x = slb$year, y = slb$est,
-  line = list(color = "#ff7f0e", width = 2),
-  name = "Sublegal",
-  hovertemplate = paste0(
-    "Sublegal B %{x}: %{y:.3g}<extra></extra>"
+if (!is.null(mv$sublegal_biomass)) {
+  slb <- mv$sublegal_biomass
+  p <- add_lines(
+    p = p, x = slb$year, y = slb$est,
+    line = list(color = "#ff7f0e", width = 2),
+    name = "Sublegal",
+    hovertemplate = paste0(
+      "Sublegal B %{x}: %{y:.3g}<extra></extra>"
+    )
   )
-)
+}
 
 # Total biomass
 if (!is.null(mv$total_biomass)) {
