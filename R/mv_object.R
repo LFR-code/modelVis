@@ -50,7 +50,9 @@ new_mv <- function(meta, ...) {
   ts_names <- c(
     "spawning_biomass", "legal_biomass",
     "sublegal_biomass", "total_biomass",
-    "recruitment"
+    "recruitment", "harvest_rate",
+    "harvest_rate_secondary",
+    "legal_hr"
   )
   for (nm in ts_names) {
     df <- x[[nm]]

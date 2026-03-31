@@ -127,8 +127,14 @@ p_rec <- do.call(
   what = layout, args = c(list(p = p_rec), lay_rec)
 )
 
-# --- Panel 3: Legal harvest rate with catch bars ---
-lu <- mv$legal_hr
+# --- Panel 3: Harvest rate with catch bars ---
+# Use harvest_rate (new slot) with fallback to
+# legal_hr (legacy slot) for backwards compat
+hr <- mv$harvest_rate
+if (is.null(hr)) hr <- mv$legal_hr
+hr_label <- meta$hr_label
+if (is.null(hr_label)) hr_label <- "Harvest rate"
+
 p_hr <- plot_ly()
 
 # Catch bars (background)
@@ -145,15 +151,15 @@ if (!is.null(mv$landed_catch_total)) {
   )
 }
 
-# HR line (guard against NULL legal_hr)
-if (!is.null(lu)) {
-  has_hr_ci <- "lwr" %in% names(lu) &&
-    any(!is.na(lu$lwr))
+# Primary HR line
+if (!is.null(hr)) {
+  has_hr_ci <- "lwr" %in% names(hr) &&
+    any(!is.na(hr$lwr))
   if (has_hr_ci) {
     p_hr <- add_ribbons(
       p = p_hr,
-      x = lu$year,
-      ymin = lu$lwr, ymax = lu$upr,
+      x = hr$year,
+      ymin = hr$lwr, ymax = hr$upr,
       line = list(width = 0),
       fillcolor = "rgba(31,119,180,0.2)",
       showlegend = FALSE, hoverinfo = "skip"
@@ -161,10 +167,31 @@ if (!is.null(lu)) {
   }
   p_hr <- add_lines(
     p = p_hr,
-    x = lu$year, y = lu$est,
+    x = hr$year, y = hr$est,
     line = list(color = "#1f77b4", width = 2),
-    name = "Legal HR", showlegend = FALSE,
-    hovertemplate = "U %{x}: %{y:.4f}<extra></extra>"
+    name = hr_label, showlegend = FALSE,
+    hovertemplate = paste0(
+      hr_label, " %{x}: %{y:.4f}<extra></extra>"
+    )
+  )
+}
+
+# Secondary HR (e.g., sublegal discard rate)
+hr2 <- mv$harvest_rate_secondary
+if (!is.null(hr2)) {
+  hr2_label <- meta$hr_secondary_label
+  if (is.null(hr2_label))
+    hr2_label <- "Secondary harvest rate"
+  p_hr <- add_lines(
+    p = p_hr,
+    x = hr2$year, y = hr2$est,
+    line = list(
+      color = "#ff7f0e", width = 2, dash = "dash"
+    ),
+    name = hr2_label, showlegend = TRUE,
+    hovertemplate = paste0(
+      hr2_label, " %{x}: %{y:.4f}<extra></extra>"
+    )
   )
 }
 
@@ -184,13 +211,13 @@ if (has_refpts && !is.null(mv$ref_points$lUmsy)) {
 
 lay_hr <- modelVis::mv_layout()
 lay_hr$xaxis$title <- "Year"
-lay_hr$yaxis$title <- "Legal harvest rate"
+lay_hr$yaxis$title <- hr_label
 lay_hr$yaxis2 <- list(
   overlaying = "y", side = "right",
   title = "Catch", showgrid = FALSE
 )
 lay_hr$shapes <- hr_shapes
-lay_hr$showlegend <- FALSE
+lay_hr$showlegend <- !is.null(hr2)
 lay_hr$barmode <- "overlay"
 
 p_hr <- do.call(
