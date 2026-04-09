@@ -8,10 +8,11 @@ Authors@R:
 Author: Samuel Johnson [aut, cre]
 Maintainer: Samuel Johnson <sdnjohnson@landmarkfisheries.com>
 Description: Generates interactive HTML flexdashboard reports
-    for stock assessment model diagnostics. Converts raw model
-    output into standardised data structures and renders
-    navigable dashboards with plotly visualisations. Currently
-    supports sableOpMod with planned support for SISCA models.
+    for stock assessment model diagnostics and MSE simulation
+    reports. Converts raw model output into standardised data
+    structures and renders navigable dashboards with plotly
+    visualisations. Supports sableOpMod assessment models and
+    MS3 closed-loop simulation blobs.
 License: GPL (>= 3)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

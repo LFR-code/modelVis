@@ -1,0 +1,865 @@
+---
+title: "`r if (exists('tmp')) tmp$mv$meta$label else 'Simulation Report'`"
+output:
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: scroll
+    css: !expr system.file("rmd", "style.css", package = "modelVis")
+    theme: cosmo
+    includes:
+      in_header: !expr system.file("rmd", "viewport.html", package = "modelVis")
+---
+
+```{r setup, include=FALSE}
+library(plotly)
+library(modelVis)
+knitr::opts_chunk$set(
+  echo    = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.height = 6,
+  fig.width  = 9
+)
+
+# Retrieve data passed from mv_sim_dashboard()
+mv <- tmp$mv
+
+# Convenience references
+meta       <- mv$meta
+years      <- meta$years
+ages       <- meta$ages
+fleets     <- meta$fleet_names
+tMP        <- meta$tMP
+fYear      <- meta$fYear
+pT         <- meta$pT
+nReps      <- meta$n_reps
+tMP_year   <- fYear + tMP - 1
+fleet_type <- if (!is.null(meta$fleet_type)) {
+  meta$fleet_type
+} else {
+  rep(1L, length(fleets))
+}
+comm_fleets   <- fleets[fleet_type == 1]
+survey_fleets <- fleets[fleet_type == 0]
+
+# Flags
+has_catch    <- !is.null(mv$catch) &&
+                any(mv$catch$est > 0, na.rm = TRUE)
+has_refpts   <- !is.null(mv$ref_points)
+has_tac      <- !is.null(mv$tac)
+has_indices  <- !is.null(mv$indices) &&
+                nrow(mv$indices) > 0
+has_sr       <- !is.null(mv$stock_recruit) &&
+                nrow(mv$stock_recruit) > 0
+has_hcr      <- !is.null(mv$hcr_pars)
+is_nofish    <- isTRUE(meta$mp_name == "NoFish")
+has_cond_valid <- !is.null(mv$cond_valid)
+
+# Reference point values for annotation
+Bmsy <- if (has_refpts) mv$ref_points$Bmsy else NULL
+Fmsy <- if (has_refpts) mv$ref_points$Fmsy else NULL
+B0   <- if (has_refpts) mv$ref_points$B0   else NULL
+
+# All good reps for slider
+good_reps <- meta$good_reps
+
+# tMP vertical line shape (reusable)
+tMP_vline <- list(
+  type = "line",
+  x0 = tMP_year, x1 = tMP_year,
+  y0 = 0, y1 = 1, yref = "paper",
+  line = list(color = "#666666", width = 1, dash = "dot")
+)
+```
+
+# Overview
+
+## Row {data-height=80}
+
+### Simulation details
+
+**Scenario:** `r meta$scenario` |
+**MP:** `r meta$mp_name` |
+**Species:** `r meta$species` |
+**Stock:** `r meta$stock` |
+**Replicates:** `r nReps` |
+**Historical:** `r fYear`--`r tMP_year - 1` |
+**Projection:** `r tMP_year`--`r max(years)`
+
+```{r cond_valid_header, eval=has_cond_valid, results='asis'}
+cv <- mv$cond_valid$max_re
+# Catch uses time-averaged weights by design; exclude
+# from the pass/fail check
+check_vars <- cv$variable != "Catch"
+warn_flag <- any(cv$max_abs_re[check_vars] > 0.05)
+icon <- if (warn_flag) "\u26A0\uFE0F" else "\u2705"
+cat(paste0(
+  "**Conditioning validation:** ", icon, " "
+))
+for (i in seq_len(nrow(cv))) {
+  re_pct <- round(cv$max_abs_re[i] * 100, 1)
+  cat(paste0(cv$variable[i], ": ", re_pct, "% "))
+}
+cat("\n")
+```
+
+## Row
+
+### Spawning biomass
+
+```{r sb_envelope, fig.height=3}
+p <- mv_plot_trend(
+  df       = mv$spawning_biomass,
+  ylab     = "Spawning biomass (t)",
+  ref_line = Bmsy,
+  ref_label = if (has_refpts) "Bmsy" else NULL
+)
+p <- plotly_build(p)
+p$x$layout$shapes <- c(p$x$layout$shapes, list(tMP_vline))
+p
+```
+
+## Row
+
+### Total catch
+
+```{r catch_envelope, eval=has_catch, fig.height=3}
+p <- mv_plot_trend(
+  df       = mv$catch,
+  ylab     = "Catch (t)",
+  colour   = "#d62728"
+)
+p <- plotly_build(p)
+p$x$layout$shapes <- c(p$x$layout$shapes, list(tMP_vline))
+p
+```
+
+```{r catch_placeholder, eval=!has_catch, fig.height=3}
+plotly_empty() %>%
+  layout(
+    title = list(
+      text = "No fishing in this scenario",
+      font = list(size = 14, color = "#999999")
+    )
+  )
+```
+
+## Row
+
+### Recruitment
+
+```{r rec_envelope, fig.height=3}
+p <- mv_plot_trend(
+  df     = mv$recruitment,
+  ylab   = "Recruitment (age 0)",
+  colour = "#2ca02c"
+)
+p <- plotly_build(p)
+p$x$layout$shapes <- c(p$x$layout$shapes, list(tMP_vline))
+p
+```
+
+## Row
+
+### Total biomass
+
+```{r tb_envelope, fig.height=3}
+p <- mv_plot_trend(
+  df       = mv$total_biomass,
+  ylab     = "Total biomass (t)",
+  colour   = "#ff7f0e",
+  ref_line = B0,
+  ref_label = if (has_refpts) "B0" else NULL
+)
+p <- plotly_build(p)
+p$x$layout$shapes <- c(p$x$layout$shapes, list(tMP_vline))
+p
+```
+
+## Row
+
+### Natural mortality (mean over ages)
+
+```{r m_envelope, eval=!is.null(mv$nat_mort), fig.height=3}
+p <- mv_plot_trend(
+  df     = mv$nat_mort,
+  ylab   = "M (mean over ages)",
+  colour = "#8c564b"
+)
+p <- plotly_build(p)
+p$x$layout$shapes <- c(p$x$layout$shapes, list(tMP_vline))
+p
+```
+
+
+# Fishing {`r if (is_nofish) ".hidden"`}
+
+## Row
+
+### Harvest rate by fleet
+
+```{r hr_fleet, eval=has_catch}
+hr_comm <- mv$harvest_rate[
+  mv$harvest_rate$fleet %in% comm_fleets, ,
+  drop = FALSE
+]
+if (nrow(hr_comm) > 0) {
+  p <- mv_plot_trend(
+    df     = hr_comm,
+    ylab   = "Apical F",
+    colour = "#1f77b4",
+    ref_line = Fmsy,
+    ref_label = if (has_refpts) "Fmsy" else NULL
+  )
+  p <- plotly_build(p)
+p$x$layout$shapes <- c(p$x$layout$shapes, list(tMP_vline))
+  p
+}
+```
+
+### Catch by fleet
+
+```{r catch_fleet, eval=has_catch}
+ct_comm <- mv$catch_by_fleet[
+  mv$catch_by_fleet$fleet %in% comm_fleets, ,
+  drop = FALSE
+]
+if (nrow(ct_comm) > 0) {
+  mv_plot_trend_multi(
+    df      = ct_comm,
+    group   = "fleet",
+    ylab    = "Catch (t)",
+    colours = mv_fleet_colours(
+      fleet_names = comm_fleets
+    )
+  )
+}
+```
+
+## Row {eval=has_tac}
+
+### TAC
+
+```{r tac_envelope, eval=has_tac}
+p <- mv_plot_trend(
+  df     = mv$tac,
+  ylab   = "TAC (t)",
+  colour = "#9467bd"
+)
+p <- plotly_build(p)
+p$x$layout$shapes <- c(p$x$layout$shapes, list(tMP_vline))
+p
+```
+
+
+# Indices {`r if (!has_indices) ".hidden"`}
+
+```{r index_helpers, eval=has_indices, include=FALSE}
+idx_cols <- mv_fleet_colours(
+  fleet_names = survey_fleets
+)
+has_survey_data <- !is.null(mv$survey_data) &&
+  length(mv$survey_data) > 0
+
+# Generic index slider from survey_data bundle
+.idx_slider <- function(fl, col) {
+  sd <- mv$survey_data[[fl]]
+  if (is.null(sd)) return(NULL)
+
+  tr_state <- sd$state
+  tr_idx   <- sd$index
+  tr_q     <- sd$q
+  unit     <- sd$label
+
+  y_label <- paste0(
+    fl, " (", unit, ")"
+  )
+
+  p <- plot_ly()
+  for (i in seq_along(good_reps)) {
+    r <- good_reps[i]
+    st_sub <- tr_state[tr_state$rep == r, , drop = FALSE]
+    ix_sub <- tr_idx[tr_idx$rep == r, , drop = FALSE]
+    q_sub  <- tr_q[tr_q$rep == r, , drop = FALSE]
+    scaled <- ix_sub$value / q_sub$value
+    iv <- which(!is.na(scaled) & scaled > 0)
+
+    p <- add_lines(
+      p = p,
+      x = st_sub$year, y = st_sub$value,
+      visible = (i == 1),
+      name = paste0("Vuln. ", unit),
+      line = list(color = col, width = 2),
+      showlegend = FALSE
+    )
+    if (length(iv) > 0) {
+      p <- add_markers(
+        p = p,
+        x = ix_sub$year[iv], y = scaled[iv],
+        visible = (i == 1),
+        name = "Index / q",
+        marker = list(
+          color = col, size = 5,
+          symbol = "circle-open",
+          line = list(width = 1.5, color = col)
+        ),
+        showlegend = FALSE
+      )
+    } else {
+      # Placeholder trace (invisible) to keep trace count
+      p <- add_markers(
+        p = p,
+        x = NA, y = NA,
+        visible = FALSE,
+        name = "Index / q",
+        showlegend = FALSE
+      )
+    }
+  }
+
+  # Slider: toggle pairs of traces (vB + idx per rep)
+  n_per_rep <- 2L
+  idx_steps <- lapply(
+    X = seq_along(good_reps),
+    FUN = function(i) {
+      vis <- rep(FALSE, length(good_reps) * n_per_rep)
+      vis[((i - 1) * n_per_rep + 1):(i * n_per_rep)] <-
+        TRUE
+      list(
+        method = "restyle",
+        args = list(list(visible = as.list(vis))),
+        label = as.character(good_reps[i])
+      )
+    }
+  )
+
+  lay_i <- mv_layout()
+  lay_i$xaxis$title <- "Year"
+  lay_i$yaxis$title <- y_label
+  lay_i$xaxis$range <- list(min(years), max(years))
+  lay_i$showlegend <- FALSE
+  lay_i$shapes <- list(tMP_vline)
+  lay_i$sliders <- list(list(
+    active = 0,
+    currentvalue = list(
+      prefix = "Replicate: ",
+      font = list(size = 12)
+    ),
+    pad = list(t = 40),
+    steps = idx_steps
+  ))
+  p <- do.call(
+    what = layout,
+    args = c(list(p = p), lay_i)
+  )
+  mv_config(p = p)
+}
+```
+
+## Row
+
+### `r survey_fleets[1]` survey
+
+```{r idx_panel_1, eval=has_indices && has_survey_data && length(survey_fleets) >= 1}
+.idx_slider(fl = survey_fleets[1], col = idx_cols[1])
+```
+
+## Row
+
+### `r if (length(survey_fleets) >= 2) survey_fleets[2] else ""`
+
+```{r idx_panel_2, eval=has_indices && has_survey_data && length(survey_fleets) >= 2}
+.idx_slider(fl = survey_fleets[2], col = idx_cols[2])
+```
+
+
+# Example replicate
+
+## Row {data-height=50}
+
+###
+
+Use the slider below each plot to page through
+replicates.
+
+## Row
+
+### Spawning biomass
+
+```{r rep_sb_slider}
+sb_traces <- mv$traces$spawning_biomass
+p <- plot_ly()
+for (i in seq_along(good_reps)) {
+  r <- good_reps[i]
+  sub <- sb_traces[sb_traces$rep == r, , drop = FALSE]
+  p <- add_lines(
+    p = p,
+    x = sub$year, y = sub$value,
+    visible = (i == 1),
+    name = paste0("Rep ", r),
+    line = list(color = "#1f77b4", width = 2),
+    hovertemplate = paste0(
+      "Rep ", r, " %{x}: %{y:.3g}<extra></extra>"
+    )
+  )
+}
+
+steps <- lapply(
+  X = seq_along(good_reps),
+  FUN = function(i) {
+    vis <- rep(FALSE, length(good_reps))
+    vis[i] <- TRUE
+    list(
+      method = "restyle",
+      args = list(list(visible = as.list(vis))),
+      label = as.character(good_reps[i])
+    )
+  }
+)
+
+lay <- mv_layout()
+lay$xaxis$title <- "Year"
+lay$yaxis$title <- "Spawning biomass (t)"
+lay$showlegend <- FALSE
+lay$shapes <- list(tMP_vline)
+lay$sliders <- list(list(
+  active = 0,
+  currentvalue = list(
+    prefix = "Replicate: ",
+    font = list(size = 12)
+  ),
+  pad = list(t = 40),
+  steps = steps
+))
+if (!is.null(Bmsy)) {
+  lay$shapes <- c(lay$shapes, list(list(
+    type = "line",
+    x0 = min(years), x1 = max(years),
+    y0 = Bmsy, y1 = Bmsy,
+    line = list(
+      color = "#999999", width = 1.5, dash = "dash"
+    )
+  )))
+}
+
+p <- do.call(
+  what = layout,
+  args = c(list(p = p), lay)
+)
+mv_config(p = p)
+```
+
+### Catch
+
+```{r rep_catch_slider}
+ct_traces <- mv$traces$catch
+p <- plot_ly()
+for (i in seq_along(good_reps)) {
+  r <- good_reps[i]
+  sub <- ct_traces[ct_traces$rep == r, , drop = FALSE]
+  p <- add_lines(
+    p = p,
+    x = sub$year, y = sub$value,
+    visible = (i == 1),
+    name = paste0("Rep ", r),
+    line = list(color = "#d62728", width = 2),
+    hovertemplate = paste0(
+      "Rep ", r, " %{x}: %{y:.3g}<extra></extra>"
+    )
+  )
+}
+
+lay2 <- mv_layout()
+lay2$xaxis$title <- "Year"
+lay2$yaxis$title <- "Catch (t)"
+lay2$showlegend <- FALSE
+lay2$shapes <- list(tMP_vline)
+lay2$sliders <- list(list(
+  active = 0,
+  currentvalue = list(
+    prefix = "Replicate: ",
+    font = list(size = 12)
+  ),
+  pad = list(t = 40),
+  steps = steps
+))
+
+p <- do.call(
+  what = layout,
+  args = c(list(p = p), lay2)
+)
+mv_config(p = p)
+```
+
+## Row
+
+### Recruitment
+
+```{r rep_rec_slider}
+rc_traces <- mv$traces$recruitment
+p <- plot_ly()
+for (i in seq_along(good_reps)) {
+  r <- good_reps[i]
+  sub <- rc_traces[rc_traces$rep == r, , drop = FALSE]
+  p <- add_lines(
+    p = p,
+    x = sub$year, y = sub$value,
+    visible = (i == 1),
+    name = paste0("Rep ", r),
+    line = list(color = "#2ca02c", width = 2),
+    hovertemplate = paste0(
+      "Rep ", r, " %{x}: %{y:.3g}<extra></extra>"
+    )
+  )
+}
+
+lay3 <- mv_layout()
+lay3$xaxis$title <- "Year"
+lay3$yaxis$title <- "Recruitment (age 0)"
+lay3$showlegend <- FALSE
+lay3$shapes <- list(tMP_vline)
+lay3$sliders <- list(list(
+  active = 0,
+  currentvalue = list(
+    prefix = "Replicate: ",
+    font = list(size = 12)
+  ),
+  pad = list(t = 40),
+  steps = steps
+))
+
+p <- do.call(
+  what = layout,
+  args = c(list(p = p), lay3)
+)
+mv_config(p = p)
+```
+
+### Stock-recruitment
+
+```{r rep_sr_slider, eval=has_sr}
+sr_data <- mv$stock_recruit
+p <- plot_ly()
+
+# BH curve (always visible, first trace)
+has_bh <- has_refpts &&
+  !is.na(mv$ref_points$rec_a) &&
+  !is.na(mv$ref_points$rec_b)
+if (has_bh) {
+  reca <- mv$ref_points$rec_a
+  recb <- mv$ref_points$rec_b
+  ssb_seq <- seq(
+    from = 0,
+    to   = max(sr_data$ssb, na.rm = TRUE) * 1.1,
+    length.out = 200
+  )
+  r_pred <- reca * ssb_seq / (1 + recb * ssb_seq)
+  p <- add_lines(
+    p = p,
+    x = ssb_seq, y = r_pred,
+    name = "BH curve",
+    line = list(color = "#d62728", width = 2),
+    hovertemplate = paste0(
+      "BH: SSB=%{x:.3g} R=%{y:.3g}<extra></extra>"
+    )
+  )
+}
+
+# Replicate scatter traces
+for (i in seq_along(good_reps)) {
+  r <- good_reps[i]
+  sub <- sr_data[sr_data$rep == r, , drop = FALSE]
+  p <- add_markers(
+    p = p,
+    x = sub$ssb, y = sub$recruitment,
+    visible = (i == 1),
+    name = paste0("Rep ", r),
+    color = I(ifelse(
+      test = sub$period == "Historical",
+      yes  = "#1f77b4", no = "#999999"
+    )),
+    marker = list(size = 5),
+    text = sub$year,
+    hovertemplate = paste0(
+      "Rep ", r,
+      "<br>Year: %{text}",
+      "<br>SSB: %{x:.3g}",
+      "<br>R: %{y:.3g}<extra></extra>"
+    )
+  )
+}
+
+# Slider steps: BH curve always visible (trace 0),
+# rep traces toggled (traces 1..nReps)
+sr_steps <- lapply(
+  X = seq_along(good_reps),
+  FUN = function(i) {
+    vis <- rep(FALSE, length(good_reps))
+    vis[i] <- TRUE
+    # Prepend TRUE for BH curve if present
+    if (has_bh) vis <- c(TRUE, vis)
+    list(
+      method = "restyle",
+      args = list(list(visible = as.list(vis))),
+      label = as.character(good_reps[i])
+    )
+  }
+)
+
+lay4 <- mv_layout()
+lay4$xaxis$title <- "Spawning biomass (t)"
+lay4$yaxis$title <- "Recruitment (age 0)"
+lay4$showlegend <- FALSE
+lay4$sliders <- list(list(
+  active = 0,
+  currentvalue = list(
+    prefix = "Replicate: ",
+    font = list(size = 12)
+  ),
+  pad = list(t = 40),
+  steps = sr_steps
+))
+
+p <- do.call(
+  what = layout,
+  args = c(list(p = p), lay4)
+)
+mv_config(p = p)
+```
+
+
+# Conditioning {`r if (!has_cond_valid) ".hidden"`}
+
+## Row {data-height=60}
+
+###
+
+Historical MS3 operating model states vs NCAM assessment
+model estimates (replicate 1). Relative error =
+(MS3 - NCAM) / |NCAM|.
+
+```{r re_range, eval=has_cond_valid, include=FALSE}
+# Per-state RE axis range: [-1, 1] or wider if needed
+cv <- mv$cond_valid
+.re_lim <- function(re) {
+  max(1, ceiling(max(abs(re), na.rm = TRUE) * 10) / 10)
+}
+re_lim_ssb <- .re_lim(re = cv$re_ssb)
+re_lim_R   <- .re_lim(re = cv$re_R)
+re_lim_N   <- .re_lim(re = cv$re_N)
+re_lim_C   <- if (!is.null(cv$re_C)) .re_lim(re = cv$re_C) else 1
+```
+
+## Row
+
+### Spawning biomass: MS3 vs NCAM
+
+```{r cond_ssb, eval=has_cond_valid}
+cv <- mv$cond_valid
+p <- plot_ly() %>%
+  add_lines(
+    x = cv$years, y = cv$ncam_ssb,
+    name = "NCAM",
+    line = list(color = "#d62728", width = 2)
+  ) %>%
+  add_lines(
+    x = cv$years, y = cv$ms3_ssb,
+    name = "MS3",
+    line = list(color = "#1f77b4", width = 2,
+                dash = "dash")
+  )
+lay <- mv_layout()
+lay$xaxis$title <- "Year"
+lay$yaxis$title <- "Spawning biomass (t)"
+lay$showlegend <- TRUE
+p <- do.call(what = layout, args = c(list(p = p), lay))
+mv_config(p = p)
+```
+
+### SSB relative error
+
+```{r cond_ssb_re, eval=has_cond_valid}
+cv <- mv$cond_valid
+df <- data.frame(year = cv$years, est = cv$re_ssb)
+p <- mv_plot_trend(
+  df = df, ylab = "Relative error",
+  colour = "#333333", ref_line = 0
+)
+p <- layout(p, yaxis = list(range = list(-re_lim_ssb, re_lim_ssb)))
+p
+```
+
+## Row
+
+### Recruitment: MS3 vs NCAM
+
+```{r cond_rec, eval=has_cond_valid}
+cv <- mv$cond_valid
+p <- plot_ly() %>%
+  add_lines(
+    x = cv$years, y = cv$ncam_R,
+    name = "NCAM",
+    line = list(color = "#d62728", width = 2)
+  ) %>%
+  add_lines(
+    x = cv$years, y = cv$ms3_R,
+    name = "MS3",
+    line = list(color = "#2ca02c", width = 2,
+                dash = "dash")
+  )
+lay <- mv_layout()
+lay$xaxis$title <- "Year"
+lay$yaxis$title <- "Recruitment (age 0)"
+lay$showlegend <- TRUE
+p <- do.call(what = layout, args = c(list(p = p), lay))
+mv_config(p = p)
+```
+
+### Recruitment relative error
+
+```{r cond_rec_re, eval=has_cond_valid}
+cv <- mv$cond_valid
+df <- data.frame(year = cv$years, est = cv$re_R)
+p <- mv_plot_trend(
+  df = df, ylab = "Relative error",
+  colour = "#333333", ref_line = 0
+)
+p <- layout(p, yaxis = list(range = list(-re_lim_R, re_lim_R)))
+p
+```
+
+## Row
+
+### Total N: MS3 vs NCAM
+
+```{r cond_n, eval=has_cond_valid}
+cv <- mv$cond_valid
+p <- plot_ly() %>%
+  add_lines(
+    x = cv$years, y = cv$ncam_N,
+    name = "NCAM",
+    line = list(color = "#d62728", width = 2)
+  ) %>%
+  add_lines(
+    x = cv$years, y = cv$ms3_N,
+    name = "MS3",
+    line = list(color = "#ff7f0e", width = 2,
+                dash = "dash")
+  )
+lay <- mv_layout()
+lay$xaxis$title <- "Year"
+lay$yaxis$title <- "Total numbers"
+lay$showlegend <- TRUE
+p <- do.call(what = layout, args = c(list(p = p), lay))
+mv_config(p = p)
+```
+
+### Total N relative error
+
+```{r cond_n_re, eval=has_cond_valid}
+cv <- mv$cond_valid
+df <- data.frame(year = cv$years, est = cv$re_N)
+p <- mv_plot_trend(
+  df = df, ylab = "Relative error",
+  colour = "#333333", ref_line = 0
+)
+p <- layout(p, yaxis = list(range = list(-re_lim_N, re_lim_N)))
+p
+```
+
+## Row
+
+### Catch: MS3 vs NCAM
+
+```{r cond_catch, eval=has_cond_valid && !is.null(mv$cond_valid$ncam_C)}
+cv <- mv$cond_valid
+p <- plot_ly() %>%
+  add_lines(
+    x = cv$years, y = cv$ncam_C,
+    name = "NCAM",
+    line = list(color = "#d62728", width = 2)
+  ) %>%
+  add_lines(
+    x = cv$years, y = cv$ms3_C,
+    name = "MS3",
+    line = list(color = "#9467bd", width = 2,
+                dash = "dash")
+  )
+lay <- mv_layout()
+lay$xaxis$title <- "Year"
+lay$yaxis$title <- "Catch (t)"
+lay$showlegend <- TRUE
+p <- do.call(what = layout, args = c(list(p = p), lay))
+mv_config(p = p)
+```
+
+### Catch relative error
+
+```{r cond_catch_re, eval=has_cond_valid && !is.null(mv$cond_valid$re_C)}
+cv <- mv$cond_valid
+df <- data.frame(year = cv$years, est = cv$re_C)
+p <- mv_plot_trend(
+  df = df, ylab = "Relative error",
+  colour = "#333333", ref_line = 0
+)
+p <- layout(p, yaxis = list(range = list(-re_lim_C, re_lim_C)))
+p
+```
+
+
+# Performance {`r if (pT < 15) ".hidden"`}
+
+## Row {data-height=80}
+
+###
+
+Performance summary over `r nReps` replicates across
+the `r pT`-year projection period
+(`r tMP_year`--`r max(years)`).
+
+## Row
+
+### Spawning biomass relative to Bmsy
+
+```{r depletion, eval=has_refpts}
+dep <- mv$spawning_biomass
+dep$est <- dep$est / Bmsy
+dep$lwr <- dep$lwr / Bmsy
+dep$upr <- dep$upr / Bmsy
+p <- mv_plot_trend(
+  df       = dep,
+  ylab     = "SB / Bmsy",
+  ref_line = 1.0,
+  ref_label = "Bmsy"
+)
+lrp_line <- list(
+  type = "line",
+  x0 = min(years), x1 = max(years),
+  y0 = 0.4, y1 = 0.4,
+  line = list(
+    color = "#d62728", width = 1, dash = "dash"
+  )
+)
+p <- layout(p, shapes = list(tMP_vline, lrp_line))
+p
+```
+
+### Catch variability
+
+```{r catch_var, eval=has_catch}
+proj_idx <- which(years >= tMP_year)
+if (length(proj_idx) > 1) {
+  ct_proj <- mv$catch[proj_idx, , drop = FALSE]
+  ct_proj$cv <- (ct_proj$upr - ct_proj$lwr) /
+    (2 * ct_proj$est + 1e-10)
+  cv_df <- data.frame(
+    year = ct_proj$year,
+    est  = ct_proj$cv
+  )
+  mv_plot_trend(
+    df     = cv_df,
+    ylab   = "Catch envelope width (relative)",
+    colour = "#8c564b"
+  )
+}
+```

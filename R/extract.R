@@ -67,6 +67,12 @@ extract.default <- function(fit, label = "", ...) {
   if (!is.null(fit$repOpt) && !is.null(fit$data)) {
     return("sableOpMod")
   }
+  # MS3 simulation blob: has om and ctlList with
+  # replicate-indexed arrays
+  if (!is.null(fit$om) && !is.null(fit$ctlList) &&
+      !is.null(fit$om$SB_ispt)) {
+    return("ms3Blob")
+  }
   # Add more fingerprints here as models are added:
   # if (!is.null(fit$siscaField)) return("siscaModel")
   NULL
