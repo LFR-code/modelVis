@@ -25,13 +25,15 @@ mv_sim_dashboard <- function(blob,
                              label       = NULL,
                              probs       = c(0.025, 0.5,
                                              0.975),
+                             perf_stats  = NULL,
                              output_file = NULL) {
 
   # 1. Extract mv_sim object
   mv <- extract(
-    fit   = blob,
-    label = label,
-    probs = probs
+    fit        = blob,
+    label      = label,
+    probs      = probs,
+    perf_stats = perf_stats
   )
 
   # 2. Pass to Rmd via temporary global variable

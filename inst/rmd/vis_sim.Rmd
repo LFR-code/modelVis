@@ -41,6 +41,7 @@ fleet_type <- if (!is.null(meta$fleet_type)) {
 }
 comm_fleets   <- fleets[fleet_type == 1]
 survey_fleets <- fleets[fleet_type == 0]
+sexes         <- meta$sex_names
 
 # Flags
 has_catch    <- !is.null(mv$catch) &&
@@ -54,6 +55,10 @@ has_sr       <- !is.null(mv$stock_recruit) &&
 has_hcr      <- !is.null(mv$hcr_pars)
 is_nofish    <- isTRUE(meta$mp_name == "NoFish")
 has_cond_valid <- !is.null(mv$cond_valid)
+has_perf_stats <- !is.null(mv$perf_summary) &&
+  is.data.frame(mv$perf_summary) &&
+  nrow(mv$perf_summary) > 0
+has_hcr_diag <- !is.null(mv$hcr_diag)
 
 # Reference point values for annotation
 Bmsy <- if (has_refpts) mv$ref_points$Bmsy else NULL
@@ -194,11 +199,37 @@ p
 
 # Fishing {`r if (is_nofish) ".hidden"`}
 
+## Row {data-height=500}
+
+### Harvest control rule
+
+```{r hcr_plot, eval=has_hcr_diag}
+mv_plot_hcr(
+  hcr_pars   = mv$hcr_diag$shape,
+  trajectory = mv$hcr_diag$trajectory,
+  good_reps  = good_reps,
+  title      = "AGC Interim HCR"
+)
+```
+
 ## Row
 
-### Harvest rate by fleet
+### Harvest rate (C / SSB)
 
-```{r hr_fleet, eval=has_catch}
+```{r harvest_rate, eval=has_catch && !is.null(mv$exploit_rate)}
+p <- mv_plot_trend(
+  df     = mv$exploit_rate,
+  ylab   = "Harvest rate (C / SSB)",
+  colour = "#1f77b4"
+)
+p <- plotly_build(p)
+p$x$layout$shapes <- c(p$x$layout$shapes, list(tMP_vline))
+p
+```
+
+### Fishing mortality (apical F)
+
+```{r fmort_rate, eval=has_catch}
 hr_comm <- mv$harvest_rate[
   mv$harvest_rate$fleet %in% comm_fleets, ,
   drop = FALSE
@@ -206,13 +237,13 @@ hr_comm <- mv$harvest_rate[
 if (nrow(hr_comm) > 0) {
   p <- mv_plot_trend(
     df     = hr_comm,
-    ylab   = "Apical F",
-    colour = "#1f77b4",
+    ylab   = "Instantaneous F",
+    colour = "#ff7f0e",
     ref_line = Fmsy,
     ref_label = if (has_refpts) "Fmsy" else NULL
   )
   p <- plotly_build(p)
-p$x$layout$shapes <- c(p$x$layout$shapes, list(tMP_vline))
+  p$x$layout$shapes <- c(p$x$layout$shapes, list(tMP_vline))
   p
 }
 ```
@@ -628,6 +659,9 @@ mv_config(p = p)
 ```
 
 
+```{r child_sel, child=system.file("rmd", "child_selectivity.Rmd", package = "modelVis"), eval=!is.null(mv$selectivity_at_age)}
+```
+
 # Conditioning {`r if (!has_cond_valid) ".hidden"`}
 
 ## Row {data-height=60}
@@ -807,17 +841,26 @@ p
 ```
 
 
-# Performance {`r if (pT < 15) ".hidden"`}
+# Performance {`r if (pT < 10) ".hidden"`}
 
-## Row {data-height=80}
+## Column {data-width=350}
 
-###
+### Key performance metrics
 
-Performance summary over `r nReps` replicates across
-the `r pT`-year projection period
+Performance over `r nReps` replicates,
+`r pT`-year projection
 (`r tMP_year`--`r max(years)`).
 
-## Row
+```{r perf_table, eval=has_perf_stats}
+knitr::kable(
+  x         = mv$perf_summary,
+  row.names = FALSE,
+  align     = c("l", "r"),
+  col.names = c("Metric", "Value")
+)
+```
+
+## Column {data-width=650}
 
 ### Spawning biomass relative to Bmsy
 
@@ -840,7 +883,11 @@ lrp_line <- list(
     color = "#d62728", width = 1, dash = "dash"
   )
 )
-p <- layout(p, shapes = list(tMP_vline, lrp_line))
+p <- plotly_build(p)
+p$x$layout$shapes <- c(
+  p$x$layout$shapes,
+  list(tMP_vline, lrp_line)
+)
 p
 ```
 

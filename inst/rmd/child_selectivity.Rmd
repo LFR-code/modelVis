@@ -53,6 +53,42 @@ p <- do.call(
 modelVis::mv_config(p = p)
 ```
 
+### Selectivity Surface
+
+```{r sel_surface, eval=!is.null(mv$selectivity_surface)}
+surf_fleets <- unique(mv$selectivity_surface$fleet)
+
+if (length(surf_fleets) == 1) {
+  mv_plot_surface(
+    df    = mv$selectivity_surface,
+    ylab  = "Age",
+    xlab  = "Year",
+    title = paste0(surf_fleets[1], " selectivity")
+  )
+} else {
+  plot_list <- list()
+  for (fl in surf_fleets) {
+    sub <- mv$selectivity_surface[
+      mv$selectivity_surface$fleet == fl, ,
+      drop = FALSE
+    ]
+    p <- mv_plot_surface(
+      df    = sub,
+      ylab  = "Age",
+      xlab  = "Year",
+      title = fl
+    )
+    plot_list[[length(plot_list) + 1L]] <- p
+  }
+  subplot(
+    plot_list,
+    nrows  = length(plot_list),
+    shareX = TRUE,
+    margin = 0.08
+  ) |> modelVis::mv_config()
+}
+```
+
 ### Release Probability
 
 ```{r rel_prob, eval=!is.null(mv$release_probability)}

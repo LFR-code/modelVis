@@ -22,6 +22,7 @@
 #' @export
 extract.ms3Blob <- function(fit, label = NULL,
                             probs = c(0.025, 0.5, 0.975),
+                            perf_stats = NULL,
                             ...) {
 
   om      <- fit$om
@@ -200,6 +201,31 @@ extract.ms3Blob <- function(fit, label = NULL,
   )
   harvest_rate     <- .envelope_fleet(
     arr_ispft = om$F_ispft
+  )
+
+  # ---- Exploitation rate (C / SSB) ----
+  # Realised harvest rate = total catch / SSB
+  C_it <- om$C_ispt[goodRepIdx, 1, 1, , drop = FALSE]
+  dim(C_it) <- c(nGoodReps, nT)
+  SSB_it <- om$SB_ispt[goodRepIdx, 1, 1, , drop = FALSE]
+  dim(SSB_it) <- c(nGoodReps, nT)
+  HR_it <- C_it / (SSB_it + 1e-10)
+
+  exploit_rate <- data.frame(
+    year = years,
+    est  = apply(
+      X = HR_it, MARGIN = 2, FUN = quantile,
+      probs = probs[2], na.rm = TRUE
+    ),
+    lwr  = apply(
+      X = HR_it, MARGIN = 2, FUN = quantile,
+      probs = probs[1], na.rm = TRUE
+    ),
+    upr  = apply(
+      X = HR_it, MARGIN = 2, FUN = quantile,
+      probs = probs[3], na.rm = TRUE
+    ),
+    row.names = NULL
   )
 
   # ---- Survey indices ----
@@ -463,6 +489,230 @@ extract.ms3Blob <- function(fit, label = NULL,
     )
   }
 
+  # ---- Selectivity at age (time-varying) ----
+  selectivity_at_age <- NULL
+  selectivity_surface <- NULL
+
+  # Use stored sel_iaxspft if available; fall back to
+  # deriving from F_iaxspft (commercial fleet only)
+  if (!is.null(om$sel_iaxspft)) {
+    # Build snapshot: median selectivity at tMP - 1
+    sel_dfs <- lapply(
+      X = seq_len(nF),
+      FUN = function(f) {
+        # [nReps, nA, nX, nS, nP, nF, nT]
+        sel_mat <- om$sel_iaxspft[goodRepIdx, , 1, 1, 1,
+                                   f, tMP - 1,
+                                   drop = FALSE]
+        dim(sel_mat) <- c(nGoodReps, nA)
+        med_sel <- apply(
+          X = sel_mat, MARGIN = 2, FUN = median,
+          na.rm = TRUE
+        )
+        data.frame(
+          age   = ages,
+          sex   = "Combined",
+          fleet = fleet_names[f],
+          est   = med_sel,
+          row.names = NULL,
+          stringsAsFactors = FALSE
+        )
+      }
+    )
+    selectivity_at_age <- do.call(
+      what = rbind, args = sel_dfs
+    )
+    # Drop fleets with all-zero selectivity
+    sel_max <- tapply(
+      X = selectivity_at_age$est,
+      INDEX = selectivity_at_age$fleet,
+      FUN = max, na.rm = TRUE
+    )
+    keep <- names(sel_max[sel_max > 0])
+    selectivity_at_age <- selectivity_at_age[
+      selectivity_at_age$fleet %in% keep, ,
+      drop = FALSE
+    ]
+
+    # Build surface: median selectivity across reps
+    # for each fleet with non-zero sel
+    surf_dfs <- lapply(
+      X = which(fleet_names %in% keep),
+      FUN = function(f) {
+        surf_list <- lapply(
+          X = seq_len(nT),
+          FUN = function(t) {
+            sel_mat <- om$sel_iaxspft[
+              goodRepIdx, , 1, 1, 1, f, t,
+              drop = FALSE
+            ]
+            dim(sel_mat) <- c(nGoodReps, nA)
+            med_sel <- apply(
+              X = sel_mat, MARGIN = 2,
+              FUN = median, na.rm = TRUE
+            )
+            data.frame(
+              year  = years[t],
+              age   = ages,
+              fleet = fleet_names[f],
+              est   = med_sel,
+              row.names = NULL,
+              stringsAsFactors = FALSE
+            )
+          }
+        )
+        do.call(what = rbind, args = surf_list)
+      }
+    )
+    selectivity_surface <- do.call(
+      what = rbind, args = surf_dfs
+    )
+
+  } else if (!is.null(om$F_iaxspft)) {
+    # Fallback: derive from F-at-age (commercial only)
+    F_mat <- om$F_iaxspft[goodRepIdx, , 1, 1, 1, 1, ,
+                           drop = FALSE]
+    dim(F_mat) <- c(nGoodReps, nA, nT)
+
+    # Median F across reps, then normalise per year
+    med_F <- apply(
+      X = F_mat, MARGIN = c(2, 3),
+      FUN = median, na.rm = TRUE
+    )
+    sel_derived <- apply(
+      X = med_F, MARGIN = 2,
+      FUN = function(fv) {
+        mx <- max(fv, na.rm = TRUE)
+        if (mx > 0) fv / mx else rep(0, length(fv))
+      }
+    )
+
+    # Snapshot at tMP - 1
+    selectivity_at_age <- data.frame(
+      age   = ages,
+      sex   = "Combined",
+      fleet = fleet_names[1],
+      est   = sel_derived[, tMP - 1],
+      row.names = NULL,
+      stringsAsFactors = FALSE
+    )
+
+    # Surface for commercial fleet
+    surf_list <- lapply(
+      X = seq_len(nT),
+      FUN = function(t) {
+        data.frame(
+          year  = years[t],
+          age   = ages,
+          fleet = fleet_names[1],
+          est   = sel_derived[, t],
+          row.names = NULL,
+          stringsAsFactors = FALSE
+        )
+      }
+    )
+    selectivity_surface <- do.call(
+      what = rbind, args = surf_list
+    )
+  }
+
+  # ---- HCR diagnostics ----
+  hcr_diag <- NULL
+  agc_pars <- if (!is.null(ctlList$mp$hcr$agc)) {
+    ctlList$mp$hcr$agc
+  } else {
+    NULL
+  }
+
+  if (!is.null(agc_pars) && !is.null(ref_points)) {
+    hcr_shape <- list(
+      Bmsy    = ref_points$Bmsy,
+      LRP     = agc_pars$LRP,
+      midCaut = agc_pars$midCaut,
+      USR     = agc_pars$USR,
+      Ffloor  = agc_pars$Ffloor,
+      Fmid    = agc_pars$Fmid,
+      Fusr    = agc_pars$Fusr,
+      Fref    = agc_pars$Fref
+    )
+
+    # Build per-replicate trajectory
+    proj_idx <- tMP:nT
+    nProj <- length(proj_idx)
+
+    hcr_traj_list <- lapply(
+      X = goodRepIdx,
+      FUN = function(i) {
+        est_B <- rep(NA_real_, nProj)
+        target_F <- rep(NA_real_, nProj)
+        for (k in seq_len(nProj)) {
+          tt <- proj_idx[k]
+          pt <- tt - tMP + 1
+          est_B[k] <- mp$assess$retroSB_itspt[
+            i, pt, 1, 1, tt
+          ]
+          if (!is.null(mp$hcr$targetF_ispt))
+            target_F[k] <- mp$hcr$targetF_ispt[
+              i, 1, 1, tt
+            ]
+        }
+        true_SSB <- om$SB_ispt[i, 1, 1, proj_idx]
+        true_C <- om$C_ispt[i, 1, 1, proj_idx]
+        realised_HR <- true_C / (true_SSB + 1e-10)
+
+        data.frame(
+          rep         = i,
+          year        = years[proj_idx],
+          est_B       = est_B,
+          true_B      = true_SSB,
+          target_F    = target_F,
+          realised_HR = realised_HR,
+          row.names   = NULL,
+          stringsAsFactors = FALSE
+        )
+      }
+    )
+    hcr_traj <- do.call(
+      what = rbind, args = hcr_traj_list
+    )
+
+    hcr_diag <- list(
+      shape      = hcr_shape,
+      trajectory = hcr_traj
+    )
+  }
+
+  # ---- Performance statistics ----
+  perf_summary <- NULL
+  if (!is.null(perf_stats) && is.data.frame(perf_stats)) {
+    metric_labels <- c(
+      pBtGt.4Bmsy      = "P(B > LRP)",
+      pBtGt.8Bmsy      = "P(B > 0.8 Bmsy)",
+      pBtGtBmsy        = "P(B > Bmsy)",
+      pBtargetGtBmsy   = "P(B > Bmsy) at horizon",
+      "pBtargetGt.8Bmsy" = "P(B > 0.8 Bmsy) at horizon",
+      avgCatch_t       = "Avg catch (t)",
+      avgCatch_short   = "Avg catch 10 yr (t)",
+      catchAAV         = "Catch AAV",
+      recoveryTime     = "Recovery time (yr)",
+      pRecover         = "P(recover to 0.8 Bmsy)",
+      recoveryTimeBmsy = "Recovery time to Bmsy (yr)",
+      pRecoverBmsy     = "P(recover to Bmsy)"
+    )
+    avail <- intersect(
+      names(metric_labels), names(perf_stats)
+    )
+    if (length(avail) > 0) {
+      vals <- unlist(perf_stats[1, avail])
+      perf_summary <- data.frame(
+        Metric = metric_labels[avail],
+        Value  = vals,
+        row.names = NULL,
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+
   # ---- Build mv object ----
   mv <- new_mv(
     meta = list(
@@ -492,6 +742,7 @@ extract.ms3Blob <- function(fit, label = NULL,
     nat_mort         = nat_mort,
     catch_by_fleet   = catch_by_fleet,
     harvest_rate     = harvest_rate,
+    exploit_rate     = exploit_rate,
     indices          = indices,
     survey_data      = survey_data,
     vuln_biomass     = vuln_biomass,
@@ -500,8 +751,13 @@ extract.ms3Blob <- function(fit, label = NULL,
     traces           = traces,
     stock_recruit    = stock_recruit,
     ref_points       = ref_points,
-    hcr_pars         = hcr_pars,
-    cond_valid       = cond_valid
+    hcr_pars            = hcr_pars,
+    cond_valid          = cond_valid,
+    selectivity_at_age  = selectivity_at_age,
+    selectivity_surface = selectivity_surface,
+    hcr_diag            = hcr_diag,
+    perf_stats          = perf_stats,
+    perf_summary        = perf_summary
   )
 
   # Set simulation class
