@@ -1,3 +1,17 @@
+# modelVis 0.1.4
+
+## Documentation
+
+* Added `README.md`, developed from the package vignettes:
+  pipeline overview, installation, quick start, the `mv`
+  object and component conventions, writing an extractor,
+  tidy helpers, colour palettes, supported models, and
+  development conventions
+* Added `HANDOVER.md` documenting project status, the `mv`
+  contract, how to write a dispatcher for a new model, and
+  the roadmap for length-based assessment output
+* Added `^HANDOVER\.md$` to `.Rbuildignore`
+
 # modelVis 0.1.3
 
 ## Composition fit plot restyling
