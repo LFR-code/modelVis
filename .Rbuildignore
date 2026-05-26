@@ -5,5 +5,8 @@
 ^LICENSE\.md$
 ^README\.md$
 ^HANDOVER\.md$
+^NEWS\.md$
+^\.gitignore$
 ^doc$
 ^Meta$
+^\.positai$

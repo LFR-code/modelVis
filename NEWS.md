@@ -1,3 +1,36 @@
+# modelVis 0.1.5
+
+## Multi-stock column layout for Fits to Data
+
+* **Index fits, catch fits, length comp fits**: stocks are now displayed as
+  columns instead of stacking fleet/stock groups vertically. Length comp panels
+  use n_stocks × n_sexes columns per fleet row. A blank placeholder panel is
+  inserted for any (fleet × stock) combination with no data, preserving grid
+  alignment.
+
+* **Data Summary**: datatype rows appear in fixed order (Length comp on top,
+  Catch on bottom); fleet dots within each row are jittered; legend shows each
+  fleet name once across all stock panels; explicit y-axis range prevents Catch
+  tick label from being clipped.
+
+* **CSS fix**: `.chart-wrapper .chart-stage` overridden with
+  `overflow: visible; height: auto` so `htmltools::tagList` panels beyond the
+  first are no longer clipped by flexdashboard's default `overflow: hidden`.
+
+## extract.R
+
+* `extract.default()` gives a clear error for objects with an explicit but
+  unregistered class rather than attempting auto-detection.
+* `siscaL` recognised before `sableOpMod` in auto-detection (disambiguated by
+  `lenBinMids_l` and `G_llxpq`).
+
+## Life history / selectivity pages
+
+* `vis_fit.Rmd` eval guards updated: Life History page renders when any of
+  `weight_at_age`, `length_at_age`, `age_length_key`, or `maturity_at_length`
+  is present; Selectivity page renders for `selectivity_at_length` too.
+* Maturity at Length tab added to the Life History page.
+
 # modelVis 0.1.4
 
 ## Documentation

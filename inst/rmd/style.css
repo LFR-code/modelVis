@@ -1,5 +1,13 @@
 /* modelVis flexdashboard styling */
 
+/* Allow chart-stage to grow for multi-chart tagList panels.
+   Overrides flexdashboard's default overflow:hidden which clips
+   all tagList items beyond the first. */
+.chart-wrapper .chart-stage {
+  overflow: visible !important;
+  height:   auto    !important;
+}
+
 .chart-wrapper {
   padding: 5px;
 }

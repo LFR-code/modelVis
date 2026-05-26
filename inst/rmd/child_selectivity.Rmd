@@ -7,7 +7,7 @@ Row {.tabset}
 
 ### Selectivity at Age
 
-```{r sel_age}
+```{r sel_age, eval=!is.null(mv$selectivity_at_age)}
 mv_plot_selectivity(
   df     = mv$selectivity_at_age,
   by_sex = length(sexes) > 1,

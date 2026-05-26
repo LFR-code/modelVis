@@ -7,7 +7,7 @@ Row {.tabset}
 
 ### Weight at Age
 
-```{r waa_plot}
+```{r waa_plot, eval=!is.null(mv$weight_at_age)}
 waa <- mv$weight_at_age
 sc <- mv_sex_colours(sex_names = unique(waa$sex))
 p <- plot_ly()
@@ -136,6 +136,27 @@ lay <- modelVis::mv_layout()
 lay$xaxis$title <- "Age"
 lay$yaxis$title <- "Proportion mature"
 lay$title <- "Maturity at Age"
+p <- do.call(
+  what = layout, args = c(list(p = p), lay)
+)
+modelVis::mv_config(p = p)
+```
+
+### Maturity at Length
+
+```{r mal_plot, eval=!is.null(mv$maturity_at_length)}
+mal <- mv$maturity_at_length
+p <- plot_ly(data = mal, x = ~length, y = ~est)
+p <- add_lines(
+  p = p,
+  line = list(color = "#1f77b4", width = 2),
+  showlegend = FALSE,
+  hovertemplate = "Len %{x}: %{y:.3f}<extra></extra>"
+)
+lay <- modelVis::mv_layout()
+lay$xaxis$title <- "Length"
+lay$yaxis$title <- "Proportion mature"
+lay$title <- "Maturity at Length"
 p <- do.call(
   what = layout, args = c(list(p = p), lay)
 )

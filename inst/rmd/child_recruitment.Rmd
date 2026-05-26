@@ -12,25 +12,36 @@ Row {.tabset}
 # log-residuals (bottom)
 
 # --- Recruitment panel ---
-rec <- mv$recruitment
-p_rec <- plot_ly(data = rec, x = ~year)
+rec      <- mv$recruitment
+rec_stks <- if ("stock" %in% names(rec) && length(unique(rec$stock)) > 1L) unique(rec$stock) else NULL
+stock_pal_rec <- c("#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd")
 
-has_ci <- "lwr" %in% names(rec) && any(!is.na(rec$lwr))
-if (has_ci) {
-  p_rec <- add_ribbons(
-    p = p_rec,
-    ymin = ~lwr, ymax = ~upr,
-    line = list(width = 0),
-    fillcolor = "rgba(44,160,44,0.2)",
-    showlegend = FALSE, hoverinfo = "skip"
+p_rec <- plot_ly()
+for (s_i in seq_along(if (!is.null(rec_stks)) rec_stks else list(NULL))) {
+  stk_r  <- if (!is.null(rec_stks)) rec_stks[s_i] else NULL
+  sub_r  <- if (!is.null(stk_r)) rec[rec$stock == stk_r, , drop = FALSE] else rec
+  sub_r  <- sub_r[order(sub_r$year), , drop = FALSE]
+  col_r  <- if (!is.null(rec_stks)) {
+    stock_pal_rec[((s_i - 1L) %% length(stock_pal_rec)) + 1L]
+  } else {
+    "#2ca02c"
+  }
+  lbl_r  <- if (!is.null(stk_r)) stk_r else "Recruitment"
+  has_ci <- "lwr" %in% names(sub_r) && any(!is.na(sub_r$lwr))
+  if (has_ci) {
+    p_rec <- add_ribbons(
+      p = p_rec, x = sub_r$year, ymin = sub_r$lwr, ymax = sub_r$upr,
+      line = list(width = 0), fillcolor = "rgba(127,127,127,0.15)",
+      showlegend = FALSE, hoverinfo = "skip"
+    )
+  }
+  p_rec <- add_lines(
+    p = p_rec, x = sub_r$year, y = sub_r$est,
+    line = list(color = col_r, width = 2), name = lbl_r,
+    showlegend = !is.null(rec_stks),
+    hovertemplate = paste0(lbl_r, " %{x}: %{y:.3g}<extra></extra>")
   )
 }
-p_rec <- add_lines(
-  p = p_rec, y = ~est,
-  line = list(color = "#2ca02c", width = 2),
-  name = "Recruitment", showlegend = FALSE,
-  hovertemplate = "R %{x}: %{y:.3g}<extra></extra>"
-)
 
 # R0 reference line
 rec_shapes <- list()
@@ -48,6 +59,7 @@ if (!is.null(mv$sr_params) &&
 lay_rec <- modelVis::mv_layout()
 lay_rec$yaxis$title <- "Recruitment"
 lay_rec$shapes <- rec_shapes
+lay_rec$showlegend <- !is.null(rec_stks)
 p_rec <- do.call(
   what = layout, args = c(list(p = p_rec), lay_rec)
 )
@@ -102,13 +114,17 @@ if (!is.null(mv$rec_devs)) {
   )
 }
 
-p_out <- subplot(
-  p_rec, p_resid,
-  nrows = 2, shareX = TRUE,
-  titleY = TRUE,
-  heights = c(0.6, 0.4),
-  margin = 0.04
-)
+if (!is.null(mv$rec_devs)) {
+  p_out <- subplot(
+    p_rec, p_resid,
+    nrows = 2, shareX = TRUE,
+    titleY = TRUE,
+    heights = c(0.6, 0.4),
+    margin = 0.04
+  )
+} else {
+  p_out <- p_rec
+}
 modelVis::mv_config(p = p_out)
 ```
 

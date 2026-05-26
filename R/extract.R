@@ -26,19 +26,19 @@ extract <- function(fit, ...) {
 #' @rdname extract
 #' @export
 extract.default <- function(fit, label = "", ...) {
-  # Auto-detect known model types for unclassed objects
+  # If the caller already set an explicit class, the method is just
+  # missing — do not auto-detect a different type; give a clear error.
+  if (!identical(class(fit), "list")) {
+    stop(
+      "No extract() method found for class '",
+      paste(class(fit), collapse = "', '"), "'.\n",
+      "Load the model package with devtools::load_all() or library().",
+      call. = FALSE
+    )
+  }
+  # Auto-detect known model types for unclassed (plain list) objects
   detected <- .detect_model_type(fit = fit)
   if (!is.null(detected)) {
-    # Guard: if class already set, method isn't registered
-    if (detected %in% class(fit)) {
-      stop(
-        "Model type '", detected, "' detected but ",
-        "extract.", detected, "() is not registered.\n",
-        "Load the model package with ",
-        "devtools::load_all() or library().",
-        call. = FALSE
-      )
-    }
     class(fit) <- c(detected, class(fit))
     return(extract(fit = fit, label = label, ...))
   }
@@ -46,8 +46,7 @@ extract.default <- function(fit, label = "", ...) {
     "Unrecognised model type. ",
     "No extract() method found for class '",
     paste(class(fit), collapse = "', '"), "'.\n",
-    "Ensure the model package (e.g., sableOpMod) ",
-    "is loaded and registers extract.modeltype().",
+    "Set class(fit) <- \"modeltype\" and load the model package.",
     call. = FALSE
   )
 }
@@ -63,6 +62,12 @@ extract.default <- function(fit, label = "", ...) {
 #' @keywords internal
 .detect_model_type <- function(fit) {
   if (!is.list(fit)) return(NULL)
+  # siscaL: length-structured SISCA — check before sableOpMod (repOpt overlap)
+  if (!is.null(fit$repOpt) &&
+      !is.null(fit$repOpt$lenBinMids_l) &&
+      !is.null(fit$repOpt$G_llxpq)) {
+    return("siscaL")
+  }
   # sableOpMod: has repOpt and data
   if (!is.null(fit$repOpt) && !is.null(fit$data)) {
     return("sableOpMod")

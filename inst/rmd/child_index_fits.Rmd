@@ -8,146 +8,113 @@ Row
 ### Index Fits with Residuals
 
 ```{r idx_fits_resid}
-# Single column: each fleet gets a fit panel + residual
-# panel below it, all sharing the x-axis
+# Per fleet: fit row + residual row; stocks as columns when multi-stock.
 
 idx <- mv$index_fits
-fit_fleets <- unique(idx$fleet)
-# Only show fleets with actual observations
-fit_fleets <- fit_fleets[vapply(
-  X = fit_fleets,
-  FUN = function(fl) {
-    any(!is.na(idx$obs[idx$fleet == fl]))
-  },
-  FUN.VALUE = logical(1)
-)]
+has_idx_stock <- "stock" %in% names(idx) && length(unique(idx$stock)) > 1L
 
-fc <- mv_fleet_colours(fleet_names = fit_fleets)
-plot_list <- list()
+if (has_idx_stock) {
+  fit_combos <- unique(idx[, c("fleet", "stock"), drop = FALSE])
+} else {
+  all_fleets <- unique(idx$fleet)
+  fit_combos <- data.frame(fleet = all_fleets, stock = NA_character_,
+                           stringsAsFactors = FALSE)
+}
+fit_combos <- fit_combos[vapply(seq_len(nrow(fit_combos)), function(k) {
+  fl  <- fit_combos$fleet[k]
+  stk <- fit_combos$stock[k]
+  obs_vals <- if (!is.na(stk)) idx$obs[idx$fleet == fl & idx$stock == stk] else idx$obs[idx$fleet == fl]
+  any(!is.na(obs_vals))
+}, logical(1)), , drop = FALSE]
 
-for (fl in fit_fleets) {
-  sub <- idx[idx$fleet == fl, , drop = FALSE]
-  obs_sub <- sub[!is.na(sub$obs) & sub$obs > 0,
-                 , drop = FALSE]
+fc              <- mv_fleet_colours(fleet_names = unique(fit_combos$fleet))
+fleet_names_all <- unique(fit_combos$fleet)
+idx_stocks      <- if (has_idx_stock) unique(idx$stock) else NA_character_
+fleet_plots     <- list()
 
-  # --- Fit panel ---
-  p_fit <- plot_ly()
-
-  # Predicted line (vulnerable biomass if available)
+make_fit_panel <- function(fl, stk, has_stk, panel_lbl) {
+  sub     <- if (has_stk) idx[idx$fleet == fl & idx$stock == stk, , drop = FALSE] else idx[idx$fleet == fl, , drop = FALSE]
+  obs_sub <- sub[!is.na(sub$obs) & sub$obs > 0, , drop = FALSE]
+  p_fit   <- plot_ly()
   if (!is.null(mv$vulnerable_biomass)) {
-    vb <- mv$vulnerable_biomass[
-      mv$vulnerable_biomass$fleet == fl,
-      , drop = FALSE
-    ]
-    if (nrow(vb) > 0) {
-      p_fit <- add_lines(
-        p = p_fit,
-        x = vb$year, y = vb$est,
-        line = list(color = "#cccccc", width = 1.5),
-        name = "Vuln. biomass",
-        showlegend = FALSE,
-        hovertemplate = paste0(
-          "VB %{x}: %{y:.3g}<extra></extra>"
-        )
-      )
-    }
+    vb <- mv$vulnerable_biomass[mv$vulnerable_biomass$fleet == fl, , drop = FALSE]
+    if (nrow(vb) > 0)
+      p_fit <- add_lines(p = p_fit, x = vb$year, y = vb$est,
+        line = list(color = "#cccccc", width = 1.5), showlegend = FALSE,
+        hovertemplate = "VB %{x}: %{y:.3g}<extra></extra>")
   }
-
-  # Predicted index (qB)
-  pred_sub <- sub[!is.na(sub$pred) & sub$pred > 0,
-                  , drop = FALSE]
-  if (nrow(pred_sub) > 0) {
-    p_fit <- add_lines(
-      p = p_fit,
-      x = pred_sub$year, y = pred_sub$pred,
-      line = list(color = fc[fl], width = 2),
-      name = "Predicted",
+  pred_sub <- sub[!is.na(sub$pred) & sub$pred > 0, , drop = FALSE]
+  if (nrow(pred_sub) > 0)
+    p_fit <- add_lines(p = p_fit, x = pred_sub$year, y = pred_sub$pred,
+      line = list(color = fc[fl], width = 2), showlegend = FALSE,
+      hovertemplate = "Pred %{x}: %{y:.3g}<extra></extra>")
+  if (nrow(obs_sub) > 0)
+    p_fit <- add_markers(p = p_fit, x = obs_sub$year, y = obs_sub$obs,
+      marker = list(color = fc[fl], size = 6, line = list(color = "white", width = 0.5)),
       showlegend = FALSE,
-      hovertemplate = paste0(
-        "Pred %{x}: %{y:.3g}<extra></extra>"
-      )
-    )
-  }
-
-  # Observed points
-  if (nrow(obs_sub) > 0) {
-    p_fit <- add_markers(
-      p = p_fit,
-      x = obs_sub$year, y = obs_sub$obs,
-      marker = list(
-        color = fc[fl], size = 6,
-        line = list(color = "white", width = 0.5)
-      ),
-      name = "Observed",
-      showlegend = FALSE,
-      hovertemplate = paste0(
-        "Obs %{x}: %{y:.3g}<extra></extra>"
-      )
-    )
-  }
-
+      hovertemplate = "Obs %{x}: %{y:.3g}<extra></extra>")
   lay_fit <- modelVis::mv_layout()
-  lay_fit$annotations <- list(
-    mv_top_label(label = fl)
-  )
+  lay_fit$annotations <- list(mv_top_label(label = panel_lbl))
   lay_fit$yaxis$title <- "Index"
-  p_fit <- do.call(
-    what = layout,
-    args = c(list(p = p_fit), lay_fit)
-  )
-  plot_list[[length(plot_list) + 1L]] <- p_fit
+  do.call(what = layout, args = c(list(p = p_fit), lay_fit))
+}
 
-  # --- Residual panel ---
+make_resid_panel <- function(fl, stk, has_stk) {
+  sub       <- if (has_stk) idx[idx$fleet == fl & idx$stock == stk, , drop = FALSE] else idx[idx$fleet == fl, , drop = FALSE]
   resid_sub <- sub[!is.na(sub$residual), , drop = FALSE]
-  p_resid <- plot_ly()
+  p_resid   <- plot_ly()
   if (nrow(resid_sub) > 0) {
-    resid_col <- ifelse(
-      test = resid_sub$residual >= 0,
-      yes  = "#d62728", no = "#1f77b4"
-    )
-    p_resid <- add_bars(
-      p = p_resid,
-      x = resid_sub$year,
-      y = resid_sub$residual,
-      marker = list(color = resid_col),
-      showlegend = FALSE,
-      hovertemplate = paste0(
-        "%{x}: %{y:.3f}<extra></extra>"
-      )
-    )
+    resid_col <- ifelse(resid_sub$residual >= 0, "#d62728", "#1f77b4")
+    p_resid <- add_bars(p = p_resid, x = resid_sub$year, y = resid_sub$residual,
+      marker = list(color = resid_col), showlegend = FALSE,
+      hovertemplate = "%{x}: %{y:.3f}<extra></extra>")
   }
   lay_resid <- modelVis::mv_layout()
   lay_resid$yaxis$title <- "Residual"
-  lay_resid$shapes <- list(list(
-    type = "line",
-    x0 = min(years), x1 = max(years),
-    y0 = 0, y1 = 0,
-    line = list(color = "#666666", dash = "dash")
-  ))
-  p_resid <- do.call(
-    what = layout,
-    args = c(list(p = p_resid), lay_resid)
-  )
-  plot_list[[length(plot_list) + 1L]] <- p_resid
+  lay_resid$shapes <- list(list(type = "line",
+    x0 = min(years), x1 = max(years), y0 = 0, y1 = 0,
+    line = list(color = "#666666", dash = "dash")))
+  do.call(what = layout, args = c(list(p = p_resid), lay_resid))
 }
 
-# Stack: fit + resid pairs, each pair shares x
-n_panels <- length(plot_list)
-heights <- rep(c(0.7, 0.3), length.out = n_panels)
-heights <- heights / sum(heights)
+for (fl in fleet_names_all) {
+  if (!has_idx_stock) {
+    # Single-stock layout
+    stk       <- fit_combos$stock[fit_combos$fleet == fl][1L]
+    has_stk   <- !is.na(stk)
+    panel_lbl <- if (has_stk) paste(fl, stk, sep = " - ") else fl
+    p_fit     <- make_fit_panel(fl, stk, has_stk, panel_lbl)
+    p_resid   <- make_resid_panel(fl, stk, has_stk)
+    p_pair    <- subplot(p_fit, p_resid, nrows = 2, shareX = TRUE,
+                         titleX = FALSE, titleY = TRUE,
+                         heights = c(0.68, 0.32), margin = 0.04)
+    p_pair    <- layout(p = p_pair, xaxis = list(title = "Year"))
+    fleet_plots[[length(fleet_plots) + 1L]] <- modelVis::mv_config(p = p_pair)
+  } else {
+    # Stocks as columns; empty panel for any stock with no data for this fleet.
+    fit_panels   <- lapply(idx_stocks, function(stk) {
+      make_fit_panel(fl, stk, TRUE, stk)   # returns empty plot when no data
+    })
+    resid_panels <- lapply(idx_stocks, function(stk) {
+      make_resid_panel(fl, stk, TRUE)
+    })
+    all_panels <- c(fit_panels, resid_panels)
+    p_fleet <- do.call(subplot, c(all_panels, list(
+      nrows = 2, shareX = TRUE, titleX = FALSE, titleY = TRUE,
+      heights = c(0.68, 0.32), margin = 0.04
+    )))
+    p_fleet <- layout(p = p_fleet, xaxis = list(title = "Year"),
+                      title = fl)
+    fleet_plots[[length(fleet_plots) + 1L]] <- modelVis::mv_config(p = p_fleet)
+  }
+}
 
-p_out <- subplot(
-  plot_list,
-  nrows = n_panels,
-  shareX = TRUE,
-  titleX = FALSE,
-  titleY = TRUE,
-  heights = heights,
-  margin = 0.02
-)
-p_out <- layout(
-  p = p_out,
-  xaxis = list(title = "Year")
-)
-modelVis::mv_config(p = p_out)
+h_idx <- if (has_idx_stock) 380L else 320L
+if (length(fleet_plots) == 1L) {
+  fleet_plots[[1L]]
+} else {
+  htmltools::tagList(lapply(fleet_plots, function(p) {
+    htmltools::div(style = paste0("height:", h_idx, "px; margin-bottom:10px;"), p)
+  }))
+}
 ```

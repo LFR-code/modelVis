@@ -14,25 +14,30 @@ Row
 # 3. Legal harvest rate with Umsy + catch bars
 
 # --- Panel 1: SB with index overlay ---
-sb <- mv$spawning_biomass
-p_sb <- plot_ly(data = sb, x = ~year)
-
-has_sb_ci <- "lwr" %in% names(sb) && any(!is.na(sb$lwr))
-if (has_sb_ci) {
-  p_sb <- add_ribbons(
-    p = p_sb,
-    ymin = ~lwr, ymax = ~upr,
-    line = list(width = 0),
-    fillcolor = "rgba(31,119,180,0.2)",
-    showlegend = FALSE, hoverinfo = "skip"
+sb        <- mv$spawning_biomass
+sb_stks   <- if ("stock" %in% names(sb) && length(unique(sb$stock)) > 1L) unique(sb$stock) else NULL
+stock_pal <- c("#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd")
+p_sb <- plot_ly()
+for (s_i in seq_along(if (!is.null(sb_stks)) sb_stks else list(NULL))) {
+  stk_s  <- if (!is.null(sb_stks)) sb_stks[s_i] else NULL
+  sub_sb <- if (!is.null(stk_s)) sb[sb$stock == stk_s, , drop = FALSE] else sb
+  sub_sb <- sub_sb[order(sub_sb$year), , drop = FALSE]
+  col_s  <- stock_pal[((s_i - 1L) %% length(stock_pal)) + 1L]
+  lbl_s  <- if (!is.null(stk_s)) stk_s else "Spawning biomass"
+  has_sb_ci <- "lwr" %in% names(sub_sb) && any(!is.na(sub_sb$lwr))
+  if (has_sb_ci) {
+    p_sb <- add_ribbons(
+      p = p_sb, x = sub_sb$year, ymin = sub_sb$lwr, ymax = sub_sb$upr,
+      line = list(width = 0), fillcolor = "rgba(31,119,180,0.2)",
+      showlegend = FALSE, hoverinfo = "skip"
+    )
+  }
+  p_sb <- add_lines(
+    p = p_sb, x = sub_sb$year, y = sub_sb$est,
+    line = list(color = col_s, width = 2), name = lbl_s,
+    hovertemplate = paste0(lbl_s, " %{x}: %{y:.3g}<extra></extra>")
   )
 }
-p_sb <- add_lines(
-  p = p_sb, y = ~est,
-  line = list(color = "#1f77b4", width = 2),
-  name = "Spawning biomass",
-  hovertemplate = "SB %{x}: %{y:.3g}<extra></extra>"
-)
 
 # Overlay scaled survey indices if vulnerable biomass
 # and index data available
@@ -84,26 +89,30 @@ p_sb <- do.call(
 )
 
 # --- Panel 2: Recruitment ---
-rec <- mv$recruitment
-p_rec <- plot_ly(data = rec, x = ~year)
-
-has_rec_ci <- "lwr" %in% names(rec) &&
-  any(!is.na(rec$lwr))
-if (has_rec_ci) {
-  p_rec <- add_ribbons(
-    p = p_rec,
-    ymin = ~lwr, ymax = ~upr,
-    line = list(width = 0),
-    fillcolor = "rgba(44,160,44,0.2)",
-    showlegend = FALSE, hoverinfo = "skip"
+rec      <- mv$recruitment
+rec_stks <- if ("stock" %in% names(rec) && length(unique(rec$stock)) > 1L) unique(rec$stock) else NULL
+p_rec <- plot_ly()
+for (s_i in seq_along(if (!is.null(rec_stks)) rec_stks else list(NULL))) {
+  stk_r   <- if (!is.null(rec_stks)) rec_stks[s_i] else NULL
+  sub_rec <- if (!is.null(stk_r)) rec[rec$stock == stk_r, , drop = FALSE] else rec
+  sub_rec <- sub_rec[order(sub_rec$year), , drop = FALSE]
+  col_r   <- stock_pal[((s_i - 1L) %% length(stock_pal)) + 1L]
+  lbl_r   <- if (!is.null(stk_r)) stk_r else "Recruitment"
+  has_rec_ci <- "lwr" %in% names(sub_rec) && any(!is.na(sub_rec$lwr))
+  if (has_rec_ci) {
+    p_rec <- add_ribbons(
+      p = p_rec, x = sub_rec$year, ymin = sub_rec$lwr, ymax = sub_rec$upr,
+      line = list(width = 0), fillcolor = "rgba(44,160,44,0.2)",
+      showlegend = FALSE, hoverinfo = "skip"
+    )
+  }
+  p_rec <- add_lines(
+    p = p_rec, x = sub_rec$year, y = sub_rec$est,
+    line = list(color = col_r, width = 2), name = lbl_r,
+    showlegend = FALSE,  # stock names already shown in SB panel legend
+    hovertemplate = paste0(lbl_r, " %{x}: %{y:.3g}<extra></extra>")
   )
 }
-p_rec <- add_lines(
-  p = p_rec, y = ~est,
-  line = list(color = "#2ca02c", width = 2),
-  name = "Recruitment", showlegend = FALSE,
-  hovertemplate = "R %{x}: %{y:.3g}<extra></extra>"
-)
 
 # R0 reference line
 rec_shapes <- list()
@@ -151,29 +160,35 @@ if (!is.null(mv$landed_catch_total)) {
   )
 }
 
-# Primary HR line
+# Primary HR line: per fleet, averaged over stocks when multi-stock
 if (!is.null(hr)) {
-  has_hr_ci <- "lwr" %in% names(hr) &&
-    any(!is.na(hr$lwr))
-  if (has_hr_ci) {
-    p_hr <- add_ribbons(
-      p = p_hr,
-      x = hr$year,
-      ymin = hr$lwr, ymax = hr$upr,
-      line = list(width = 0),
-      fillcolor = "rgba(31,119,180,0.2)",
-      showlegend = FALSE, hoverinfo = "skip"
+  hr_fl_names <- if ("fleet" %in% names(hr)) unique(hr$fleet) else "fleet"
+  for (fl_i in seq_along(hr_fl_names)) {
+    fl    <- hr_fl_names[fl_i]
+    hr_fl <- if ("fleet" %in% names(hr)) hr[hr$fleet == fl, , drop = FALSE] else hr
+    if ("stock" %in% names(hr_fl) && length(unique(hr_fl$stock)) > 1L) {
+      hr_agg       <- aggregate(est ~ year, data = hr_fl, FUN = mean)
+      hr_agg$fleet <- fl
+      hr_fl        <- hr_agg
+    }
+    hr_fl     <- hr_fl[order(hr_fl$year), , drop = FALSE]
+    has_hr_ci <- "lwr" %in% names(hr_fl) && any(!is.na(hr_fl$lwr))
+    if (has_hr_ci) {
+      p_hr <- add_ribbons(
+        p = p_hr, x = hr_fl$year, ymin = hr_fl$lwr, ymax = hr_fl$upr,
+        line = list(width = 0), fillcolor = "rgba(31,119,180,0.2)",
+        showlegend = FALSE, hoverinfo = "skip"
+      )
+    }
+    hr_col <- stock_pal[((fl_i - 1L) %% length(stock_pal)) + 1L]
+    p_hr <- add_lines(
+      p = p_hr, x = hr_fl$year, y = hr_fl$est,
+      line = list(color = hr_col, width = 2),
+      name = if (length(hr_fl_names) > 1L) fl else hr_label,
+      showlegend = length(hr_fl_names) > 1L,
+      hovertemplate = paste0(fl, " %{x}: %{y:.4f}<extra></extra>")
     )
   }
-  p_hr <- add_lines(
-    p = p_hr,
-    x = hr$year, y = hr$est,
-    line = list(color = "#1f77b4", width = 2),
-    name = hr_label, showlegend = FALSE,
-    hovertemplate = paste0(
-      hr_label, " %{x}: %{y:.4f}<extra></extra>"
-    )
-  )
 }
 
 # Secondary HR (e.g., sublegal discard rate)
@@ -232,6 +247,8 @@ p_out <- subplot(
   heights = c(0.4, 0.3, 0.3),
   margin = 0.04
 )
+# Ensure legend box is visible (shows stock names from SB panel)
+p_out <- layout(p = p_out, showlegend = !is.null(sb_stks))
 modelVis::mv_config(p = p_out)
 ```
 
@@ -243,25 +260,30 @@ Row {.tabset}
 ```{r all_bio}
 p <- plot_ly()
 
-# Spawning biomass
-sb <- mv$spawning_biomass
-has_sb_ci2 <- "lwr" %in% names(sb) &&
-  any(!is.na(sb$lwr))
-if (has_sb_ci2) {
-  p <- add_ribbons(
-    p = p, x = sb$year,
-    ymin = sb$lwr, ymax = sb$upr,
-    fillcolor = "rgba(214,39,40,0.15)",
-    line = list(width = 0),
-    showlegend = FALSE, hoverinfo = "skip"
+# Spawning biomass (per stock when multi-stock)
+sb       <- mv$spawning_biomass
+sb_stks2 <- if ("stock" %in% names(sb) && length(unique(sb$stock)) > 1L) unique(sb$stock) else NULL
+sb_pal2  <- c("#d62728", "#1f77b4", "#ff7f0e", "#2ca02c", "#9467bd")
+for (s_i in seq_along(if (!is.null(sb_stks2)) sb_stks2 else list(NULL))) {
+  stk_s2  <- if (!is.null(sb_stks2)) sb_stks2[s_i] else NULL
+  sub_sb2 <- if (!is.null(stk_s2)) sb[sb$stock == stk_s2, , drop = FALSE] else sb
+  sub_sb2 <- sub_sb2[order(sub_sb2$year), , drop = FALSE]
+  col_s2  <- sb_pal2[((s_i - 1L) %% length(sb_pal2)) + 1L]
+  lbl_s2  <- if (!is.null(stk_s2)) paste("Spawning -", stk_s2) else "Spawning"
+  has_sb_ci2 <- "lwr" %in% names(sub_sb2) && any(!is.na(sub_sb2$lwr))
+  if (has_sb_ci2) {
+    p <- add_ribbons(
+      p = p, x = sub_sb2$year, ymin = sub_sb2$lwr, ymax = sub_sb2$upr,
+      fillcolor = "rgba(214,39,40,0.15)", line = list(width = 0),
+      showlegend = FALSE, hoverinfo = "skip"
+    )
+  }
+  p <- add_lines(
+    p = p, x = sub_sb2$year, y = sub_sb2$est,
+    line = list(color = col_s2, width = 2), name = lbl_s2,
+    hovertemplate = paste0(lbl_s2, " %{x}: %{y:.3g}<extra></extra>")
   )
 }
-p <- add_lines(
-  p = p, x = sb$year, y = sb$est,
-  line = list(color = "#d62728", width = 2),
-  name = "Spawning",
-  hovertemplate = "SB %{x}: %{y:.3g}<extra></extra>"
-)
 
 # Legal biomass
 if (!is.null(mv$legal_biomass)) {
@@ -289,19 +311,23 @@ if (!is.null(mv$sublegal_biomass)) {
   )
 }
 
-# Total biomass
+# Total biomass (per stock when multi-stock)
 if (!is.null(mv$total_biomass)) {
-  tb <- mv$total_biomass
-  p <- add_lines(
-    p = p, x = tb$year, y = tb$est,
-    line = list(
-      color = "#7f7f7f", width = 2, dash = "dot"
-    ),
-    name = "Total",
-    hovertemplate = paste0(
-      "Total B %{x}: %{y:.3g}<extra></extra>"
+  tb      <- mv$total_biomass
+  tb_stks <- if ("stock" %in% names(tb) && length(unique(tb$stock)) > 1L) unique(tb$stock) else NULL
+  for (s_i in seq_along(if (!is.null(tb_stks)) tb_stks else list(NULL))) {
+    stk_t  <- if (!is.null(tb_stks)) tb_stks[s_i] else NULL
+    sub_tb <- if (!is.null(stk_t)) tb[tb$stock == stk_t, , drop = FALSE] else tb
+    sub_tb <- sub_tb[order(sub_tb$year), , drop = FALSE]
+    lbl_t  <- if (!is.null(stk_t)) paste("Total -", stk_t) else "Total"
+    col_t  <- sb_pal2[((s_i - 1L) %% length(sb_pal2)) + 1L]
+    p <- add_lines(
+      p = p, x = sub_tb$year, y = sub_tb$est,
+      line = list(color = col_t, width = 2, dash = "dot"),
+      name = lbl_t,
+      hovertemplate = paste0(lbl_t, " %{x}: %{y:.3g}<extra></extra>")
     )
-  )
+  }
 }
 
 lay <- modelVis::mv_layout()

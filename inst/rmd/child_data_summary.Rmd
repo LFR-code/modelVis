@@ -11,58 +11,121 @@ Row
 da <- mv$data_availability
 da$present_num <- as.integer(da$present)
 
-# Encode as fleet x datatype grid across years
-fc <- mv_fleet_colours(fleet_names = fleets)
+fc        <- mv_fleet_colours(fleet_names = fleets)
+dtypes    <- rev(unique(da$datatype))
+da_stocks <- if ("stock" %in% names(da) && length(unique(da$stock)) > 1L) unique(da$stock) else NULL
 
-p <- plot_ly()
-dtypes <- rev(unique(da$datatype))
-for (i in seq_along(dtypes)) {
-  dt <- dtypes[i]
+if (!is.null(da_stocks)) {
+  # One subplot panel per stock; datatypes as y-rows, fleets jittered within each row.
+  # Datatype order (bottom to top): Catch → Index → Length comp.
+  dtype_order <- c("Catch", "Index", "Length comp")
+  dtypes_used <- dtype_order[dtype_order %in% unique(da$datatype)]
+  dtype_pos   <- setNames(seq_along(dtypes_used), dtypes_used)
+  n_fl        <- length(fleets)
+  fl_offsets  <- if (n_fl > 1L) seq(0.2, -0.2, length.out = n_fl) else 0
+
+  stock_panels <- list()
+  shown_legs   <- character(0)   # track across ALL stock panels
+
+  for (si in seq_along(da_stocks)) {
+    stk <- da_stocks[si]
+    p   <- plot_ly()
+    for (j in seq_along(fleets)) {
+      fl <- fleets[j]
+      for (dt in dtypes_used) {
+        sub <- da[da$fleet == fl & da$datatype == dt &
+                    da$present & da$stock == stk, , drop = FALSE]
+        if (nrow(sub) == 0L) next
+        show_leg <- !(fl %in% shown_legs)
+        if (show_leg) shown_legs <- c(shown_legs, fl)
+        y_val <- dtype_pos[dt] + fl_offsets[j]
+        p <- add_markers(
+          p = p,
+          x = sub$year,
+          y = rep(y_val, nrow(sub)),
+          marker = list(color = fc[fl], size = 5, symbol = "circle"),
+          name = fl, legendgroup = fl,
+          showlegend = show_leg,
+          hovertemplate = paste0(fl, " ", dt, " %{x}<extra></extra>")
+        )
+      }
+    }
+    lay_s <- modelVis::mv_layout()
+    lay_s$yaxis$tickvals <- seq_along(dtypes_used)
+    lay_s$yaxis$ticktext <- dtypes_used
+    lay_s$yaxis$range    <- c(0.5, length(dtypes_used) + 0.5)
+    lay_s$yaxis$title    <- ""
+    lay_s$annotations    <- list(mv_top_label(label = stk))
+    lay_s$showlegend     <- FALSE   # showlegend set globally on subplot
+    lay_s$margin$l       <- 100
+    p <- do.call(what = layout, args = c(list(p = p), lay_s))
+    stock_panels[[length(stock_panels) + 1L]] <- p
+  }
+  p_out <- subplot(
+    stock_panels,
+    nrows   = length(stock_panels),
+    shareX  = TRUE, titleY = TRUE,
+    margin  = 0.04
+  )
+  p_out <- layout(
+    p = p_out,
+    xaxis      = list(title = "Year"),
+    title      = "Data Availability",
+    showlegend = TRUE
+  )
+  modelVis::mv_config(p = p_out)
+
+} else {
+  # Single-stock: flat chart, same dtype ordering and jitter as multi-stock
+  dtype_order <- c("Catch", "Index", "Length comp")
+  dtypes_used <- dtype_order[dtype_order %in% unique(da$datatype)]
+  dtype_pos   <- setNames(seq_along(dtypes_used), dtypes_used)
+  n_fl        <- length(fleets)
+  fl_offsets  <- if (n_fl > 1L) seq(0.2, -0.2, length.out = n_fl) else 0
+
+  p          <- plot_ly()
+  shown_legs <- character(0)
   for (j in seq_along(fleets)) {
     fl <- fleets[j]
-    sub <- da[da$datatype == dt & da$fleet == fl &
-              da$present, , drop = FALSE]
-    if (nrow(sub) == 0) next
-    # Stagger vertically within datatype
-    y_val <- i + (j - 1) * 0.15
-    p <- add_markers(
-      p = p,
-      x = sub$year,
-      y = rep(y_val, nrow(sub)),
-      marker = list(
-        color = fc[fl], size = 5,
-        symbol = "circle"
-      ),
-      name = fl,
-      legendgroup = fl,
-      showlegend = (i == 1),
-      hovertemplate = paste0(
-        fl, " ", dt, " %{x}<extra></extra>"
+    for (dt in dtypes_used) {
+      sub <- da[da$datatype == dt & da$fleet == fl & da$present, , drop = FALSE]
+      if (nrow(sub) == 0L) next
+      show_leg <- !(fl %in% shown_legs)
+      if (show_leg) shown_legs <- c(shown_legs, fl)
+      y_val <- dtype_pos[dt] + fl_offsets[j]
+      p <- add_markers(
+        p = p,
+        x = sub$year,
+        y = rep(y_val, nrow(sub)),
+        marker = list(color = fc[fl], size = 5, symbol = "circle"),
+        name = fl, legendgroup = fl,
+        showlegend = show_leg,
+        hovertemplate = paste0(fl, " ", dt, " %{x}<extra></extra>")
       )
-    )
+    }
   }
+  lay <- modelVis::mv_layout()
+  lay$yaxis$tickvals <- seq_along(dtypes_used)
+  lay$yaxis$ticktext <- dtypes_used
+  lay$yaxis$range    <- c(0.5, length(dtypes_used) + 0.5)
+  lay$yaxis$title    <- ""
+  lay$xaxis$title    <- "Year"
+  lay$title          <- "Data Availability"
+  lay$showlegend     <- TRUE
+  lay$margin$l       <- 100
+  p <- do.call(what = layout, args = c(list(p = p), lay))
+  modelVis::mv_config(p = p)
 }
-
-lay <- modelVis::mv_layout()
-lay$yaxis$tickvals <- seq_along(dtypes)
-lay$yaxis$ticktext <- dtypes
-lay$yaxis$title <- ""
-lay$xaxis$title <- "Year"
-lay$title <- "Data Availability"
-lay$showlegend <- TRUE
-lay$margin$l <- 100
-
-p <- do.call(what = layout, args = c(list(p = p), lay))
-modelVis::mv_config(p = p)
 ```
 
 ### Model Information
 
 ```{r model_info}
+dim_label <- if (has_len && is.null(mv$age_comp_fits)) "Lengths" else "Ages"
 info_df <- data.frame(
   Property = c(
     "Model type", "Label",
-    "Years", "Ages",
+    "Years", dim_label,
     "Sexes", "Fleets",
     "Commercial", "Survey",
     "Areas",

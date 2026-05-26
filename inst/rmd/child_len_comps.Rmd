@@ -8,124 +8,145 @@ Row {.tabset}
 ### Time-Averaged Fits
 
 ```{r len_avg_grid}
-len_fleets <- unique(mv$len_comp_fits$fleet)
-len_sexes  <- unique(mv$len_comp_fits$sex)
+len_fleets     <- unique(mv$len_comp_fits$fleet)
+len_sexes      <- unique(mv$len_comp_fits$sex)
+has_comp_stock <- "stock" %in% names(mv$len_comp_fits) &&
+                  length(unique(mv$len_comp_fits$stock)) > 1L
+len_stocks     <- if (has_comp_stock) unique(mv$len_comp_fits$stock) else NULL
 fc <- mv_fleet_colours(fleet_names = len_fleets)
 
-plot_list <- list()
+# One tagList item per fleet; nStock × nSex columns within each fleet row.
+fleet_plots <- list()
 for (fl in len_fleets) {
-  for (sx in len_sexes) {
-    sub <- mv$len_comp_fits[
-      mv$len_comp_fits$fleet == fl &
-        mv$len_comp_fits$sex == sx,
-      , drop = FALSE
-    ]
-    if (nrow(sub) == 0) next
+  col_panels <- list()
+  for (stk in if (!is.null(len_stocks)) len_stocks else list(NULL)) {
+    for (sx in len_sexes) {
+      sub <- mv$len_comp_fits[
+        mv$len_comp_fits$fleet == fl &
+          mv$len_comp_fits$sex  == sx,
+        , drop = FALSE
+      ]
+      if (!is.null(stk)) sub <- sub[sub$stock == stk, , drop = FALSE]
 
-    avg_obs <- tapply(
-      X = sub$obs, INDEX = sub$length,
-      FUN = mean, na.rm = TRUE
-    )
-    avg_pred <- tapply(
-      X = sub$pred, INDEX = sub$length,
-      FUN = mean, na.rm = TRUE
-    )
-    avg_lens <- as.numeric(names(avg_obs))
+      panel_lbl <- if (!is.null(stk) && length(len_sexes) > 1L) {
+        paste(stk, sx, sep = " - ")
+      } else if (!is.null(stk)) {
+        stk
+      } else if (length(len_sexes) > 1L) {
+        sx
+      } else {
+        fl
+      }
 
-    lbl <- if (length(len_sexes) > 1) {
-      paste(fl, "-", sx)
-    } else {
-      fl
+      if (nrow(sub) == 0L) {
+        p_e <- plot_ly()
+        lay_e <- modelVis::mv_layout()
+        lay_e$annotations <- list(mv_top_label(label = panel_lbl))
+        lay_e$barmode <- "overlay"
+        col_panels[[length(col_panels) + 1L]] <- do.call(what = layout, args = c(list(p = p_e), lay_e))
+        next
+      }
+
+      avg_obs  <- tapply(X = sub$obs,  INDEX = sub$length, FUN = mean, na.rm = TRUE)
+      avg_pred <- tapply(X = sub$pred, INDEX = sub$length, FUN = mean, na.rm = TRUE)
+      avg_lens <- as.numeric(names(avg_obs))
+
+      p <- plot_ly()
+      p <- add_bars(p = p, x = avg_lens, y = as.numeric(avg_obs),
+        marker = list(color = "rgba(180,180,180,0.6)",
+                      line  = list(color = "white", width = 0.5)),
+        showlegend = FALSE,
+        hovertemplate = "Len %{x}: %{y:.4f}<extra>Obs</extra>")
+      p <- add_lines(p = p, x = avg_lens, y = as.numeric(avg_pred),
+        line = list(color = fc[fl], width = 1.5), showlegend = FALSE,
+        hovertemplate = "Len %{x}: %{y:.4f}<extra>Pred</extra>")
+      p <- add_markers(p = p, x = avg_lens, y = as.numeric(avg_pred),
+        marker = list(color = fc[fl], size = 4,
+                      line = list(color = "white", width = 0.5)),
+        showlegend = FALSE, hoverinfo = "skip")
+      lay <- modelVis::mv_layout()
+      lay$annotations <- list(mv_top_label(label = panel_lbl))
+      lay$barmode     <- "overlay"
+      p <- do.call(what = layout, args = c(list(p = p), lay))
+      col_panels[[length(col_panels) + 1L]] <- p
     }
-
-    p <- plot_ly()
-    # Observed: grey bars
-    p <- add_bars(
-      p = p,
-      x = avg_lens, y = as.numeric(avg_obs),
-      marker = list(
-        color = "rgba(180,180,180,0.6)",
-        line = list(color = "white", width = 0.5)
-      ),
-      showlegend = FALSE,
-      hovertemplate = paste0(
-        "Len %{x}: %{y:.4f}<extra>Obs</extra>"
-      )
-    )
-    # Predicted: coloured points + line
-    p <- add_lines(
-      p = p,
-      x = avg_lens, y = as.numeric(avg_pred),
-      line = list(color = fc[fl], width = 1.5),
-      showlegend = FALSE,
-      hovertemplate = paste0(
-        "Len %{x}: %{y:.4f}<extra>Pred</extra>"
-      )
-    )
-    p <- add_markers(
-      p = p,
-      x = avg_lens, y = as.numeric(avg_pred),
-      marker = list(
-        color = fc[fl], size = 4,
-        line = list(color = "white", width = 0.5)
-      ),
-      showlegend = FALSE,
-      hoverinfo = "skip"
-    )
-
-    lay <- modelVis::mv_layout()
-    lay$annotations <- list(
-      mv_top_label(label = lbl)
-    )
-    lay$barmode <- "overlay"
-    p <- do.call(
-      what = layout, args = c(list(p = p), lay)
-    )
-    plot_list[[length(plot_list) + 1L]] <- p
   }
+  if (length(col_panels) == 0L) next
+
+  p_fleet <- if (length(col_panels) == 1L) {
+    col_panels[[1L]]
+  } else {
+    do.call(subplot, c(col_panels, list(
+      nrows = 1L, shareY = FALSE, titleX = FALSE, titleY = TRUE,
+      margin = 0.04
+    )))
+  }
+  p_fleet <- layout(p = p_fleet, title = fl,
+    annotations = list(
+      mv_bottom_label(label = "Length"),
+      mv_left_label(label   = "Mean proportion")
+    ))
+  fleet_plots[[length(fleet_plots) + 1L]] <- modelVis::mv_config(p_fleet)
 }
 
-ncol_grid <- length(len_sexes)
-nrow_grid <- max(1, length(plot_list) %/% ncol_grid)
-p_out <- subplot(
-  plot_list,
-  nrows = nrow_grid,
-  shareX = TRUE, shareY = TRUE,
-  margin = 0.05
-)
-p_out <- layout(
-  p = p_out,
-  annotations = list(
-    mv_bottom_label(label = "Length"),
-    mv_left_label(label = "Mean proportion")
-  )
-)
-modelVis::mv_config(p = p_out)
+h_avg <- 300L
+if (length(fleet_plots) == 1L) {
+  fleet_plots[[1L]]
+} else {
+  htmltools::tagList(lapply(fleet_plots, function(p) {
+    htmltools::div(style = paste0("height:", h_avg, "px; margin-bottom:10px;"), p)
+  }))
+}
 ```
 
 ### Residual Bubbles
 
 ```{r len_resid_bubble}
 if (!is.null(mv$len_comp_resids)) {
-  resid_plots <- list()
+  has_resid_stock <- "stock" %in% names(mv$len_comp_resids) &&
+                     length(unique(mv$len_comp_resids$stock)) > 1L
+  resid_stocks <- if (has_resid_stock) unique(mv$len_comp_resids$stock) else NULL
+  # One item per fleet; stocks as columns within each fleet.
+  fleet_resid_plots <- list()
   for (fl in len_fleets) {
-    sub <- mv$len_comp_resids[
-      mv$len_comp_resids$fleet == fl,
-      , drop = FALSE
-    ]
-    if (nrow(sub) == 0) next
-    p <- mv_plot_bubble(
-      df    = sub,
-      x_col = "year",
-      y_col = "length",
-      title = fl
-    )
-    resid_plots[[length(resid_plots) + 1L]] <- p
+    stk_panels <- list()
+    for (stk in if (!is.null(resid_stocks)) resid_stocks else list(NULL)) {
+      sub <- mv$len_comp_resids[mv$len_comp_resids$fleet == fl, , drop = FALSE]
+      if (!is.null(stk)) sub <- sub[sub$stock == stk, , drop = FALSE]
+      panel_lbl <- if (!is.null(stk)) stk else fl
+      if (nrow(sub) == 0L) {
+        p_e <- plot_ly()
+        lay_e <- modelVis::mv_layout()
+        lay_e$annotations <- list(mv_top_label(label = panel_lbl))
+        stk_panels[[length(stk_panels) + 1L]] <- do.call(what = layout, args = c(list(p = p_e), lay_e))
+        next
+      }
+      if (any(c("sex", "quarter") %in% names(sub))) {
+        sub <- aggregate(residual ~ year + length,
+                         data = sub, FUN = mean, na.rm = TRUE)
+      }
+      p <- mv_plot_bubble(df = sub, x_col = "year", y_col = "length",
+                          title = panel_lbl)
+      stk_panels[[length(stk_panels) + 1L]] <- p
+    }
+    if (length(stk_panels) == 0L) next
+    p_fleet <- if (length(stk_panels) == 1L) {
+      stk_panels[[1L]]
+    } else {
+      do.call(subplot, c(stk_panels, list(
+        nrows = 1L, shareX = FALSE, shareY = TRUE,
+        titleX = FALSE, titleY = TRUE, margin = 0.04
+      )))
+    }
+    p_fleet <- layout(p = p_fleet, title = fl)
+    fleet_resid_plots[[length(fleet_resid_plots) + 1L]] <- p_fleet
   }
-  if (length(resid_plots) == 1L) {
-    resid_plots[[1]]
+  if (length(fleet_resid_plots) == 1L) {
+    fleet_resid_plots[[1L]]
   } else {
-    htmltools::tagList(resid_plots)
+    htmltools::tagList(lapply(fleet_resid_plots, function(p) {
+      htmltools::div(style = "height:400px; margin-bottom:10px;", p)
+    }))
   }
 }
 ```
@@ -135,30 +156,51 @@ if (!is.null(mv$len_comp_resids)) {
 ```{r len_yearly_grid}
 plot_list <- list()
 for (fl in len_fleets) {
-  for (sx in len_sexes) {
-    sub <- mv$len_comp_fits[
-      mv$len_comp_fits$fleet == fl &
-        mv$len_comp_fits$sex == sx,
-      , drop = FALSE
-    ]
-    if (nrow(sub) == 0) next
-    lbl <- if (length(len_sexes) > 1) {
-      paste(fl, "-", sx)
-    } else {
-      fl
+  for (stk in if (!is.null(len_stocks)) len_stocks else list(NULL)) {
+    for (sx in len_sexes) {
+      sub <- mv$len_comp_fits[
+        mv$len_comp_fits$fleet == fl &
+          mv$len_comp_fits$sex == sx,
+        , drop = FALSE
+      ]
+      if (!is.null(stk)) sub <- sub[sub$stock == stk, , drop = FALSE]
+      if (nrow(sub) == 0) next
+
+      lbl <- if (!is.null(stk) && length(len_sexes) > 1) {
+        paste(fl, stk, sx, sep = " - ")
+      } else if (!is.null(stk)) {
+        paste(fl, stk, sep = " - ")
+      } else if (length(len_sexes) > 1) {
+        paste(fl, "-", sx)
+      } else {
+        fl
+      }
+
+      if ("quarter" %in% names(sub) && length(unique(sub$quarter)) > 1L) {
+        sub <- aggregate(
+          cbind(obs, pred) ~ length + year,
+          data  = sub,
+          FUN   = mean,
+          na.rm = TRUE
+        )
+      }
+      p <- mv_plot_comp_grid(
+        df      = sub,
+        bin_col = "length",
+        ylab    = "Proportion"
+      )
+      p <- layout(p = p, title = lbl)
+      plot_list[[length(plot_list) + 1L]] <- p
     }
-    p <- mv_plot_comp_grid(
-      df      = sub,
-      bin_col = "length",
-      ylab    = "Proportion"
-    )
-    p <- layout(p = p, title = lbl)
-    plot_list[[length(plot_list) + 1L]] <- p
   }
 }
+n_yr  <- length(unique(mv$len_comp_fits$year))
+h_yr  <- max(400L, 60L * n_yr + 100L)
 if (length(plot_list) == 1L) {
   plot_list[[1]]
 } else {
-  htmltools::tagList(plot_list)
+  htmltools::tagList(lapply(plot_list, function(p) {
+    htmltools::div(style = paste0("height:", h_yr, "px; margin-bottom:10px;"), p)
+  }))
 }
 ```
