@@ -8,124 +8,96 @@ Row {.tabset}
 ### Recruitment and Residuals
 
 ```{r rec_resid_stack}
-# Two-panel stack: recruitment (top) + standardised
-# log-residuals (bottom)
-
-# --- Recruitment panel ---
-rec      <- mv$recruitment
-rec_stks <- if ("stock" %in% names(rec) && length(unique(rec$stock)) > 1L) unique(rec$stock) else NULL
+rec           <- mv$recruitment
+rec_stks      <- if ("stock" %in% names(rec) && length(unique(rec$stock)) > 1L) unique(rec$stock) else NULL
 stock_pal_rec <- c("#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd")
+sigma         <- if (!is.null(mv$sr_params$sigmaR)) mv$sr_params$sigmaR else 1L
+has_devs_stock <- !is.null(mv$rec_devs) && "stock" %in% names(mv$rec_devs) &&
+                  length(unique(mv$rec_devs$stock)) > 1L
 
-p_rec <- plot_ly()
-for (s_i in seq_along(if (!is.null(rec_stks)) rec_stks else list(NULL))) {
-  stk_r  <- if (!is.null(rec_stks)) rec_stks[s_i] else NULL
-  sub_r  <- if (!is.null(stk_r)) rec[rec$stock == stk_r, , drop = FALSE] else rec
-  sub_r  <- sub_r[order(sub_r$year), , drop = FALSE]
-  col_r  <- if (!is.null(rec_stks)) {
-    stock_pal_rec[((s_i - 1L) %% length(stock_pal_rec)) + 1L]
+rec_sh <- list()
+if (!is.null(mv$sr_params$R0))
+  rec_sh <- list(list(type="line", x0=min(years), x1=max(years),
+    y0=mv$sr_params$R0, y1=mv$sr_params$R0,
+    line=list(color="#999999", width=1.5, dash="dash")))
+
+.rec_panel <- function(stk, si, label) {
+  sub <- if (!is.null(stk)) rec[rec$stock == stk, , drop=FALSE] else rec
+  sub <- sub[order(sub$year), , drop=FALSE]
+  col <- if (!is.null(stk)) stock_pal_rec[((si-1L)%%length(stock_pal_rec))+1L] else "#2ca02c"
+  lbl <- if (!is.null(stk)) stk else "Recruitment"
+  p   <- plot_ly()
+  if ("lwr" %in% names(sub) && any(!is.na(sub$lwr)))
+    p <- add_ribbons(p=p, x=sub$year, ymin=sub$lwr, ymax=sub$upr,
+      line=list(width=0), fillcolor="rgba(127,127,127,0.15)",
+      showlegend=FALSE, hoverinfo="skip")
+  p <- add_lines(p=p, x=sub$year, y=sub$est,
+    line=list(color=col, width=2), name=lbl,
+    showlegend=!is.null(rec_stks) && is.null(stk),
+    hovertemplate=paste0(lbl, " %{x}: %{y:.3g}<extra></extra>"))
+  lay <- modelVis::mv_layout()
+  if (label && !is.null(stk)) lay$annotations <- list(mv_top_label(label=stk))
+  lay$yaxis$title <- "Recruitment"
+  lay$shapes      <- rec_sh
+  do.call(layout, c(list(p=p), lay))
+}
+
+.resid_panel <- function(stk) {
+  rd <- if (!is.null(stk) && has_devs_stock)
+          mv$rec_devs[mv$rec_devs$stock == stk, , drop=FALSE]
+        else if (!is.null(mv$rec_devs)) mv$rec_devs
+        else NULL
+  p <- plot_ly()
+  if (!is.null(rd) && nrow(rd) > 0) {
+    std_r <- rd$est / sigma
+    p <- add_bars(p=p, x=rd$year, y=std_r,
+      marker=list(color=ifelse(std_r >= 0, "#2ca02c", "#d62728")),
+      showlegend=FALSE, hovertemplate="%{x}: %{y:.3f}<extra></extra>")
+    mean_r <- mean(std_r, na.rm=TRUE)
+    lay <- modelVis::mv_layout()
+    lay$xaxis$title <- "Year"
+    lay$yaxis$title <- "Std. residual"
+    lay$shapes <- list(
+      list(type="line", x0=min(rd$year), x1=max(rd$year), y0=0, y1=0,
+           line=list(color="#666666", dash="dash")),
+      list(type="line", x0=min(rd$year), x1=max(rd$year), y0=mean_r, y1=mean_r,
+           line=list(color="#d62728", dash="dot")))
+    p <- do.call(layout, c(list(p=p), lay))
+  }
+  p
+}
+
+if (!is.null(rec_stks)) {
+  # Multi-stock: stocks as columns
+  rec_pans <- lapply(seq_along(rec_stks), function(i) .rec_panel(rec_stks[i], i, TRUE))
+  if (!is.null(mv$rec_devs)) {
+    resid_pans <- lapply(rec_stks, .resid_panel)
+    all_pans <- c(rec_pans, resid_pans)
+    p_out <- do.call(subplot, c(all_pans, list(
+      nrows=2, shareX=TRUE, titleX=FALSE, titleY=TRUE,
+      heights=c(0.6, 0.4), margin=0.04
+    )))
+    p_out <- layout(p=p_out, xaxis=list(title="Year"))
   } else {
-    "#2ca02c"
+    p_out <- do.call(subplot, c(rec_pans, list(
+      nrows=1L, shareX=TRUE, titleX=FALSE, titleY=TRUE, margin=0.04
+    )))
+    p_out <- layout(p=p_out, xaxis=list(title="Year"))
   }
-  lbl_r  <- if (!is.null(stk_r)) stk_r else "Recruitment"
-  has_ci <- "lwr" %in% names(sub_r) && any(!is.na(sub_r$lwr))
-  if (has_ci) {
-    p_rec <- add_ribbons(
-      p = p_rec, x = sub_r$year, ymin = sub_r$lwr, ymax = sub_r$upr,
-      line = list(width = 0), fillcolor = "rgba(127,127,127,0.15)",
-      showlegend = FALSE, hoverinfo = "skip"
-    )
-  }
-  p_rec <- add_lines(
-    p = p_rec, x = sub_r$year, y = sub_r$est,
-    line = list(color = col_r, width = 2), name = lbl_r,
-    showlegend = !is.null(rec_stks),
-    hovertemplate = paste0(lbl_r, " %{x}: %{y:.3g}<extra></extra>")
-  )
-}
-
-# R0 reference line
-rec_shapes <- list()
-if (!is.null(mv$sr_params) &&
-    !is.null(mv$sr_params$R0)) {
-  rec_shapes <- list(list(
-    type = "line",
-    x0 = min(years), x1 = max(years),
-    y0 = mv$sr_params$R0, y1 = mv$sr_params$R0,
-    line = list(
-      color = "#999999", width = 1.5, dash = "dash"
-    )
-  ))
-}
-lay_rec <- modelVis::mv_layout()
-lay_rec$yaxis$title <- "Recruitment"
-lay_rec$shapes <- rec_shapes
-lay_rec$showlegend <- !is.null(rec_stks)
-p_rec <- do.call(
-  what = layout, args = c(list(p = p_rec), lay_rec)
-)
-
-# --- Residuals panel ---
-p_resid <- plot_ly()
-if (!is.null(mv$rec_devs)) {
-  rd <- mv$rec_devs
-  # Standardise by sigmaR if available
-  sigma <- if (!is.null(mv$sr_params) &&
-               !is.null(mv$sr_params$sigmaR)) {
-    mv$sr_params$sigmaR
-  } else {
-    1
-  }
-  std_resid <- rd$est / sigma
-  resid_col <- ifelse(
-    test = std_resid >= 0,
-    yes  = "#2ca02c", no = "#d62728"
-  )
-  p_resid <- add_bars(
-    p = p_resid,
-    x = rd$year, y = std_resid,
-    marker = list(color = resid_col),
-    showlegend = FALSE,
-    hovertemplate = "%{x}: %{y:.3f}<extra></extra>"
-  )
-
-  # Mean residual reference line
-  mean_resid <- mean(std_resid, na.rm = TRUE)
-  resid_shapes <- list(
-    list(
-      type = "line",
-      x0 = min(rd$year), x1 = max(rd$year),
-      y0 = 0, y1 = 0,
-      line = list(color = "#666666", dash = "dash")
-    ),
-    list(
-      type = "line",
-      x0 = min(rd$year), x1 = max(rd$year),
-      y0 = mean_resid, y1 = mean_resid,
-      line = list(color = "#d62728", dash = "dot")
-    )
-  )
-  lay_resid <- modelVis::mv_layout()
-  lay_resid$xaxis$title <- "Year"
-  lay_resid$yaxis$title <- "Std. residual"
-  lay_resid$shapes <- resid_shapes
-  p_resid <- do.call(
-    what = layout,
-    args = c(list(p = p_resid), lay_resid)
-  )
-}
-
-if (!is.null(mv$rec_devs)) {
-  p_out <- subplot(
-    p_rec, p_resid,
-    nrows = 2, shareX = TRUE,
-    titleY = TRUE,
-    heights = c(0.6, 0.4),
-    margin = 0.04
-  )
+  modelVis::mv_config(p=p_out)
 } else {
-  p_out <- p_rec
+  # Single-stock: 2-panel stack (rec + residuals)
+  p_rec   <- .rec_panel(NULL, 1L, FALSE)
+  p_rec   <- layout(p=p_rec, showlegend=FALSE)
+  p_resid <- .resid_panel(NULL)
+  if (!is.null(mv$rec_devs)) {
+    p_out <- subplot(p_rec, p_resid, nrows=2, shareX=TRUE,
+      titleY=TRUE, heights=c(0.6, 0.4), margin=0.04)
+  } else {
+    p_out <- p_rec
+  }
+  modelVis::mv_config(p=p_out)
 }
-modelVis::mv_config(p = p_out)
 ```
 
 ### Stock-Recruitment

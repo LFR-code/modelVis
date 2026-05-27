@@ -8,13 +8,46 @@ Row {.tabset}
 ### Fishing Mortality by Fleet
 
 ```{r fm_trend}
-mv_plot_trend_multi(
-  df      = mv$fishing_mortality,
-  group   = "fleet",
-  ylab    = "Fishing mortality (F)",
-  title   = "Fishing Mortality by Fleet",
-  colours = mv_fleet_colours(fleet_names = fleets)
-)
+fm <- mv$fishing_mortality
+fc <- mv_fleet_colours(fleet_names = fleets)
+has_fm_stock <- !is.null(fm) && "stock" %in% names(fm) &&
+                length(unique(fm$stock)) > 1L
+
+if (has_fm_stock) {
+  fm_stocks <- unique(fm$stock)
+  fm_pans <- lapply(seq_along(fm_stocks), function(si) {
+    stk    <- fm_stocks[si]
+    sub    <- fm[fm$stock == stk, , drop=FALSE]
+    fl_grp <- unique(sub$fleet)
+    p      <- plot_ly()
+    for (fl in fl_grp) {
+      fl_sub <- sub[sub$fleet == fl, , drop=FALSE]
+      fl_sub <- fl_sub[order(fl_sub$year), , drop=FALSE]
+      p <- add_lines(p=p, x=fl_sub$year, y=fl_sub$est,
+        name=fl, line=list(color=fc[fl], width=2),
+        legendgroup=fl, showlegend=(si == 1L),
+        hovertemplate=paste0(fl, " %{x}: %{y:.3g}<extra></extra>"))
+    }
+    lay <- modelVis::mv_layout()
+    lay$annotations <- list(mv_top_label(label=stk))
+    lay$yaxis$title <- "F"
+    do.call(layout, c(list(p=p), lay))
+  })
+  p_out <- do.call(subplot, c(fm_pans, list(
+    nrows=1L, shareX=TRUE, shareY=FALSE,
+    titleX=FALSE, titleY=TRUE, margin=0.04
+  )))
+  p_out <- layout(p=p_out, xaxis=list(title="Year"), showlegend=TRUE)
+  modelVis::mv_config(p=p_out)
+} else {
+  mv_plot_trend_multi(
+    df      = fm,
+    group   = "fleet",
+    ylab    = "Fishing mortality (F)",
+    title   = "Fishing Mortality by Fleet",
+    colours = fc
+  )
+}
 ```
 
 ### Natural Mortality

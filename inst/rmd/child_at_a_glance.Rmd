@@ -8,247 +8,161 @@ Row
 ### Spawning Biomass, Recruitment, and Harvest Rate
 
 ```{r at_a_glance_stack}
-# Three-panel vertical stack:
-# 1. Spawning biomass with scaled survey indices
-# 2. Recruitment with R0 reference line
-# 3. Legal harvest rate with Umsy + catch bars
-
-# --- Panel 1: SB with index overlay ---
 sb        <- mv$spawning_biomass
 sb_stks   <- if ("stock" %in% names(sb) && length(unique(sb$stock)) > 1L) unique(sb$stock) else NULL
-stock_pal <- c("#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd")
-p_sb <- plot_ly()
-for (s_i in seq_along(if (!is.null(sb_stks)) sb_stks else list(NULL))) {
-  stk_s  <- if (!is.null(sb_stks)) sb_stks[s_i] else NULL
-  sub_sb <- if (!is.null(stk_s)) sb[sb$stock == stk_s, , drop = FALSE] else sb
-  sub_sb <- sub_sb[order(sub_sb$year), , drop = FALSE]
-  col_s  <- stock_pal[((s_i - 1L) %% length(stock_pal)) + 1L]
-  lbl_s  <- if (!is.null(stk_s)) stk_s else "Spawning biomass"
-  has_sb_ci <- "lwr" %in% names(sub_sb) && any(!is.na(sub_sb$lwr))
-  if (has_sb_ci) {
-    p_sb <- add_ribbons(
-      p = p_sb, x = sub_sb$year, ymin = sub_sb$lwr, ymax = sub_sb$upr,
-      line = list(width = 0), fillcolor = "rgba(31,119,180,0.2)",
-      showlegend = FALSE, hoverinfo = "skip"
-    )
-  }
-  p_sb <- add_lines(
-    p = p_sb, x = sub_sb$year, y = sub_sb$est,
-    line = list(color = col_s, width = 2), name = lbl_s,
-    hovertemplate = paste0(lbl_s, " %{x}: %{y:.3g}<extra></extra>")
-  )
-}
-
-# Overlay scaled survey indices if vulnerable biomass
-# and index data available
-if (!is.null(mv$vulnerable_biomass) &&
-    !is.null(mv$index_fits)) {
-  sc <- mv_fleet_colours(fleet_names = survey_fleets)
-  for (sf in survey_fleets) {
-    idx_sub <- mv$index_fits[
-      mv$index_fits$fleet == sf &
-        !is.na(mv$index_fits$obs),
-      , drop = FALSE
-    ]
-    vb_sub <- mv$vulnerable_biomass[
-      mv$vulnerable_biomass$fleet == sf,
-      , drop = FALSE
-    ]
-    if (nrow(idx_sub) == 0 || nrow(vb_sub) == 0) next
-    # Scale index to SB scale using mean ratio
-    merged <- merge(
-      x = idx_sub[, c("year", "obs")],
-      y = vb_sub[, c("year", "est")],
-      by = "year"
-    )
-    merged <- merged[merged$obs > 0, , drop = FALSE]
-    if (nrow(merged) == 0) next
-    q_hat <- mean(merged$obs / merged$est, na.rm = TRUE)
-    scaled_idx <- idx_sub$obs / q_hat
-    p_sb <- add_markers(
-      p = p_sb,
-      x = idx_sub$year, y = scaled_idx,
-      name = sf,
-      marker = list(
-        color = sc[sf], size = 5,
-        line = list(color = "white", width = 0.5)
-      ),
-      hovertemplate = paste0(
-        sf, " %{x}: %{y:.3g}<extra></extra>"
-      )
-    )
-  }
-}
-
-lay_sb <- modelVis::mv_layout()
-lay_sb$yaxis$title <- "Spawning biomass"
-lay_sb$showlegend <- TRUE
-
-p_sb <- do.call(
-  what = layout, args = c(list(p = p_sb), lay_sb)
-)
-
-# --- Panel 2: Recruitment ---
-rec      <- mv$recruitment
-rec_stks <- if ("stock" %in% names(rec) && length(unique(rec$stock)) > 1L) unique(rec$stock) else NULL
-p_rec <- plot_ly()
-for (s_i in seq_along(if (!is.null(rec_stks)) rec_stks else list(NULL))) {
-  stk_r   <- if (!is.null(rec_stks)) rec_stks[s_i] else NULL
-  sub_rec <- if (!is.null(stk_r)) rec[rec$stock == stk_r, , drop = FALSE] else rec
-  sub_rec <- sub_rec[order(sub_rec$year), , drop = FALSE]
-  col_r   <- stock_pal[((s_i - 1L) %% length(stock_pal)) + 1L]
-  lbl_r   <- if (!is.null(stk_r)) stk_r else "Recruitment"
-  has_rec_ci <- "lwr" %in% names(sub_rec) && any(!is.na(sub_rec$lwr))
-  if (has_rec_ci) {
-    p_rec <- add_ribbons(
-      p = p_rec, x = sub_rec$year, ymin = sub_rec$lwr, ymax = sub_rec$upr,
-      line = list(width = 0), fillcolor = "rgba(44,160,44,0.2)",
-      showlegend = FALSE, hoverinfo = "skip"
-    )
-  }
-  p_rec <- add_lines(
-    p = p_rec, x = sub_rec$year, y = sub_rec$est,
-    line = list(color = col_r, width = 2), name = lbl_r,
-    showlegend = FALSE,  # stock names already shown in SB panel legend
-    hovertemplate = paste0(lbl_r, " %{x}: %{y:.3g}<extra></extra>")
-  )
-}
-
-# R0 reference line
-rec_shapes <- list()
-if (!is.null(mv$sr_params) &&
-    !is.null(mv$sr_params$R0)) {
-  rec_shapes <- list(list(
-    type = "line",
-    x0 = min(years), x1 = max(years),
-    y0 = mv$sr_params$R0, y1 = mv$sr_params$R0,
-    line = list(
-      color = "#999999", width = 1.5, dash = "dash"
-    )
-  ))
-}
-lay_rec <- modelVis::mv_layout()
-lay_rec$yaxis$title <- "Recruitment"
-lay_rec$shapes <- rec_shapes
-lay_rec$showlegend <- FALSE
-
-p_rec <- do.call(
-  what = layout, args = c(list(p = p_rec), lay_rec)
-)
-
-# --- Panel 3: Harvest rate with catch bars ---
-# Use harvest_rate (new slot) with fallback to
-# legal_hr (legacy slot) for backwards compat
-hr <- mv$harvest_rate
+rec       <- mv$recruitment
+rec_stks  <- if ("stock" %in% names(rec) && length(unique(rec$stock)) > 1L) unique(rec$stock) else NULL
+hr        <- mv$harvest_rate
 if (is.null(hr)) hr <- mv$legal_hr
-hr_label <- meta$hr_label
-if (is.null(hr_label)) hr_label <- "Harvest rate"
+hr_label  <- if (!is.null(meta$hr_label)) meta$hr_label else "Harvest rate"
+stock_pal <- c("#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd")
 
-p_hr <- plot_ly()
-
-# Catch bars (background)
-if (!is.null(mv$landed_catch_total)) {
-  ct <- mv$landed_catch_total
-  p_hr <- add_bars(
-    p = p_hr,
-    x = ct$year, y = ct$est,
-    marker = list(color = "rgba(200,200,200,0.4)"),
-    name = "Catch", yaxis = "y2",
-    hovertemplate = paste0(
-      "Catch %{x}: %{y:.3g}<extra></extra>"
-    )
-  )
-}
-
-# Primary HR line: per fleet, averaged over stocks when multi-stock
-if (!is.null(hr)) {
-  hr_fl_names <- if ("fleet" %in% names(hr)) unique(hr$fleet) else "fleet"
-  for (fl_i in seq_along(hr_fl_names)) {
-    fl    <- hr_fl_names[fl_i]
-    hr_fl <- if ("fleet" %in% names(hr)) hr[hr$fleet == fl, , drop = FALSE] else hr
-    if ("stock" %in% names(hr_fl) && length(unique(hr_fl$stock)) > 1L) {
-      hr_agg       <- aggregate(est ~ year, data = hr_fl, FUN = mean)
-      hr_agg$fleet <- fl
-      hr_fl        <- hr_agg
-    }
-    hr_fl     <- hr_fl[order(hr_fl$year), , drop = FALSE]
-    has_hr_ci <- "lwr" %in% names(hr_fl) && any(!is.na(hr_fl$lwr))
-    if (has_hr_ci) {
-      p_hr <- add_ribbons(
-        p = p_hr, x = hr_fl$year, ymin = hr_fl$lwr, ymax = hr_fl$upr,
-        line = list(width = 0), fillcolor = "rgba(31,119,180,0.2)",
-        showlegend = FALSE, hoverinfo = "skip"
-      )
-    }
-    hr_col <- stock_pal[((fl_i - 1L) %% length(stock_pal)) + 1L]
-    p_hr <- add_lines(
-      p = p_hr, x = hr_fl$year, y = hr_fl$est,
-      line = list(color = hr_col, width = 2),
-      name = if (length(hr_fl_names) > 1L) fl else hr_label,
-      showlegend = length(hr_fl_names) > 1L,
-      hovertemplate = paste0(fl, " %{x}: %{y:.4f}<extra></extra>")
-    )
-  }
-}
-
-# Secondary HR (e.g., sublegal discard rate)
-hr2 <- mv$harvest_rate_secondary
-if (!is.null(hr2)) {
-  hr2_label <- meta$hr_secondary_label
-  if (is.null(hr2_label))
-    hr2_label <- "Secondary harvest rate"
-  p_hr <- add_lines(
-    p = p_hr,
-    x = hr2$year, y = hr2$est,
-    line = list(
-      color = "#ff7f0e", width = 2, dash = "dash"
-    ),
-    name = hr2_label, showlegend = TRUE,
-    hovertemplate = paste0(
-      hr2_label, " %{x}: %{y:.4f}<extra></extra>"
-    )
-  )
-}
-
-# Umsy reference line
 hr_shapes <- list()
-if (has_refpts && !is.null(mv$ref_points$lUmsy)) {
-  hr_shapes <- list(list(
-    type = "line",
+if (has_refpts && !is.null(mv$ref_points$lUmsy))
+  hr_shapes <- list(list(type = "line",
     x0 = min(years), x1 = max(years),
-    y0 = mv$ref_points$lUmsy,
-    y1 = mv$ref_points$lUmsy,
-    line = list(
-      color = "#999999", width = 1.5, dash = "dash"
-    )
-  ))
+    y0 = mv$ref_points$lUmsy, y1 = mv$ref_points$lUmsy,
+    line = list(color = "#999999", width = 1.5, dash = "dash")))
+
+# --- Panel builders (stk=NULL → use all rows, single-stock path) ---
+.glance_sb <- function(stk, si, show_label) {
+  sub <- if (!is.null(stk)) sb[sb$stock == stk, , drop=FALSE] else sb
+  sub <- sub[order(sub$year), , drop=FALSE]
+  col <- stock_pal[((si - 1L) %% length(stock_pal)) + 1L]
+  lbl <- if (!is.null(stk)) stk else "Spawning biomass"
+  p   <- plot_ly()
+  if ("lwr" %in% names(sub) && any(!is.na(sub$lwr)))
+    p <- add_ribbons(p=p, x=sub$year, ymin=sub$lwr, ymax=sub$upr,
+      line=list(width=0), fillcolor="rgba(31,119,180,0.2)",
+      showlegend=FALSE, hoverinfo="skip")
+  p <- add_lines(p=p, x=sub$year, y=sub$est,
+    line=list(color=col, width=2), name=lbl, showlegend=is.null(stk),
+    hovertemplate=paste0(lbl, " %{x}: %{y:.3g}<extra></extra>"))
+  if (!is.null(mv$vulnerable_biomass) && !is.null(mv$index_fits)) {
+    sc <- mv_fleet_colours(fleet_names=survey_fleets)
+    for (sf in survey_fleets) {
+      idx_sf <- mv$index_fits[mv$index_fits$fleet == sf & !is.na(mv$index_fits$obs), , drop=FALSE]
+      if (!is.null(stk) && "stock" %in% names(idx_sf))
+        idx_sf <- idx_sf[idx_sf$stock == stk, , drop=FALSE]
+      vb_sf <- mv$vulnerable_biomass[mv$vulnerable_biomass$fleet == sf, , drop=FALSE]
+      if (nrow(idx_sf)==0 || nrow(vb_sf)==0) next
+      merged <- merge(idx_sf[, c("year","obs")], vb_sf[, c("year","est")], by="year")
+      merged <- merged[merged$obs > 0, , drop=FALSE]
+      if (nrow(merged)==0) next
+      q_hat <- mean(merged$obs / merged$est, na.rm=TRUE)
+      p <- add_markers(p=p, x=idx_sf$year, y=idx_sf$obs / q_hat,
+        name=sf, legendgroup=sf,
+        showlegend=is.null(stk) || (si == 1L),
+        marker=list(color=sc[sf], size=5, line=list(color="white", width=0.5)),
+        hovertemplate=paste0(sf, " %{x}: %{y:.3g}<extra></extra>"))
+    }
+  }
+  lay <- modelVis::mv_layout()
+  if (show_label && !is.null(stk)) lay$annotations <- list(mv_top_label(label=stk))
+  lay$yaxis$title <- "Spawn. B"
+  do.call(layout, c(list(p=p), lay))
 }
 
-lay_hr <- modelVis::mv_layout()
-lay_hr$xaxis$title <- "Year"
-lay_hr$yaxis$title <- hr_label
-lay_hr$yaxis2 <- list(
-  overlaying = "y", side = "right",
-  title = "Catch", showgrid = FALSE
-)
-lay_hr$shapes <- hr_shapes
-lay_hr$showlegend <- !is.null(hr2)
-lay_hr$barmode <- "overlay"
+.glance_rec <- function(stk, si) {
+  sub <- if (!is.null(stk) && stk %in% rec$stock) rec[rec$stock==stk, , drop=FALSE]
+         else if (is.null(stk)) rec else rec[0L, , drop=FALSE]
+  sub <- sub[order(sub$year), , drop=FALSE]
+  col <- stock_pal[((si - 1L) %% length(stock_pal)) + 1L]
+  lbl <- if (!is.null(stk)) stk else "Recruitment"
+  p   <- plot_ly()
+  if ("lwr" %in% names(sub) && any(!is.na(sub$lwr)))
+    p <- add_ribbons(p=p, x=sub$year, ymin=sub$lwr, ymax=sub$upr,
+      line=list(width=0), fillcolor="rgba(44,160,44,0.2)",
+      showlegend=FALSE, hoverinfo="skip")
+  if (nrow(sub) > 0)
+    p <- add_lines(p=p, x=sub$year, y=sub$est,
+      line=list(color=col, width=2), name=lbl, showlegend=FALSE,
+      hovertemplate=paste0(lbl, " %{x}: %{y:.3g}<extra></extra>"))
+  rec_sh <- list()
+  if (!is.null(mv$sr_params$R0))
+    rec_sh <- list(list(type="line", x0=min(years), x1=max(years),
+      y0=mv$sr_params$R0, y1=mv$sr_params$R0,
+      line=list(color="#999999", width=1.5, dash="dash")))
+  lay <- modelVis::mv_layout()
+  lay$yaxis$title <- "Recruitment"
+  lay$shapes <- rec_sh
+  do.call(layout, c(list(p=p), lay))
+}
 
-p_hr <- do.call(
-  what = layout, args = c(list(p = p_hr), lay_hr)
-)
+.glance_hr <- function(stk, si) {
+  has_stk <- !is.null(stk)
+  p <- plot_ly()
+  if (!is.null(mv$landed_catch_total)) {
+    ct   <- mv$landed_catch_total
+    ct_s <- if (has_stk && "stock" %in% names(ct)) ct[ct$stock==stk, , drop=FALSE] else ct
+    if (nrow(ct_s) > 0)
+      p <- add_bars(p=p, x=ct_s$year, y=ct_s$est,
+        marker=list(color="rgba(200,200,200,0.4)"), name="Catch",
+        yaxis="y2", showlegend=FALSE,
+        hovertemplate="Catch %{x}: %{y:.3g}<extra></extra>")
+  }
+  if (!is.null(hr)) {
+    hr_fls <- if ("fleet" %in% names(hr)) unique(hr$fleet) else "fleet"
+    for (fi in seq_along(hr_fls)) {
+      fl   <- hr_fls[fi]
+      hr_f <- if ("fleet" %in% names(hr)) hr[hr$fleet==fl, , drop=FALSE] else hr
+      if (has_stk && "stock" %in% names(hr_f)) hr_f <- hr_f[hr_f$stock==stk, , drop=FALSE]
+      if (!has_stk && "stock" %in% names(hr_f) && length(unique(hr_f$stock)) > 1L) {
+        hr_f <- aggregate(est ~ year, data=hr_f, FUN=mean)
+        hr_f$fleet <- fl
+      }
+      hr_f <- hr_f[order(hr_f$year), , drop=FALSE]
+      if (nrow(hr_f)==0) next
+      if ("lwr" %in% names(hr_f) && any(!is.na(hr_f$lwr)))
+        p <- add_ribbons(p=p, x=hr_f$year, ymin=hr_f$lwr, ymax=hr_f$upr,
+          line=list(width=0), fillcolor="rgba(31,119,180,0.2)",
+          showlegend=FALSE, hoverinfo="skip")
+      hr_c <- stock_pal[((fi - 1L) %% length(stock_pal)) + 1L]
+      p <- add_lines(p=p, x=hr_f$year, y=hr_f$est,
+        line=list(color=hr_c, width=2),
+        name=if(length(hr_fls) > 1L) fl else hr_label,
+        showlegend=(!has_stk && length(hr_fls) > 1L),
+        hovertemplate=paste0(fl, " %{x}: %{y:.4f}<extra></extra>"))
+    }
+  }
+  hr2 <- mv$harvest_rate_secondary
+  if (!is.null(hr2)) {
+    hr2_lbl <- if (!is.null(meta$hr_secondary_label)) meta$hr_secondary_label else "Secondary harvest rate"
+    p <- add_lines(p=p, x=hr2$year, y=hr2$est,
+      line=list(color="#ff7f0e", width=2, dash="dash"),
+      name=hr2_lbl, showlegend=!has_stk,
+      hovertemplate=paste0(hr2_lbl, " %{x}: %{y:.4f}<extra></extra>"))
+  }
+  lay <- modelVis::mv_layout()
+  lay$xaxis$title <- "Year"
+  lay$yaxis$title <- hr_label
+  lay$yaxis2 <- list(overlaying="y", side="right", title="Catch", showgrid=FALSE)
+  lay$shapes  <- hr_shapes
+  lay$barmode <- "overlay"
+  do.call(layout, c(list(p=p), lay))
+}
 
-# Stack all three
-p_out <- subplot(
-  p_sb, p_rec, p_hr,
-  nrows = 3, shareX = TRUE,
-  titleX = TRUE, titleY = TRUE,
-  heights = c(0.4, 0.3, 0.3),
-  margin = 0.04
-)
-# Ensure legend box is visible (shows stock names from SB panel)
-p_out <- layout(p = p_out, showlegend = !is.null(sb_stks))
+if (!is.null(sb_stks)) {
+  # Multi-stock: n_stk columns × 3 rows (SB / Rec / HR)
+  sb_pans  <- lapply(seq_along(sb_stks), function(i) .glance_sb(sb_stks[i], i, TRUE))
+  rec_pans <- lapply(seq_along(sb_stks), function(i) .glance_rec(sb_stks[i], i))
+  hr_pans  <- lapply(seq_along(sb_stks), function(i) .glance_hr(sb_stks[i], i))
+  p_out <- do.call(subplot, c(c(sb_pans, rec_pans, hr_pans), list(
+    nrows = 3, shareX = TRUE, titleX = TRUE, titleY = TRUE,
+    heights = c(0.4, 0.3, 0.3), margin = 0.04
+  )))
+  p_out <- layout(p=p_out, showlegend = !is.null(mv$vulnerable_biomass))
+} else {
+  # Single-stock: original 3-panel stack
+  p_sb  <- .glance_sb(NULL, 1L, FALSE)
+  p_sb  <- layout(p=p_sb, showlegend=TRUE)
+  p_rec <- .glance_rec(NULL, 1L)
+  p_hr  <- .glance_hr(NULL, 1L)
+  p_hr  <- layout(p=p_hr, showlegend=!is.null(mv$harvest_rate_secondary))
+  p_out <- subplot(p_sb, p_rec, p_hr, nrows=3, shareX=TRUE,
+    titleX=TRUE, titleY=TRUE, heights=c(0.4, 0.3, 0.3), margin=0.04)
+  p_out <- layout(p=p_out, showlegend=TRUE)
+}
 modelVis::mv_config(p = p_out)
 ```
 
