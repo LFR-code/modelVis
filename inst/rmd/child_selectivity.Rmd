@@ -170,18 +170,21 @@ make_gt_panel <- function(stk, p_idx) {
     offset  <- if (xi == 1L) -sex_offset else sex_offset
     x_bars  <- rep(bins + offset, n_l)
     base_b  <- rep(as.numeric(0:(n_l - 1L)), each = n_l)
-    y_bars  <- 0.8 * as.vector(g_mat)
-    src_len <- rep(bins, each = n_l)   # source bin length for each bar
+    prob_v  <- as.vector(g_mat)
+    y_bars  <- 0.8 * prob_v
+    src_len <- rep(bins, each = n_l)
     p <- add_bars(
       p = p,
       x = x_bars, y = y_bars, base = base_b,
       customdata = src_len,
+      text = round(prob_v, 4),
+      textposition = "none",
       width = rep(bar_width, length(x_bars)),
       name = sx, marker = list(color = sex_colours[xi]),
       showlegend = (is.null(stk) || p_idx == 1L),
       legendgroup = sx,
       hovertemplate = paste0(
-        sx, " src %{customdata:.0f}mm: P=%{y:.4f}<extra></extra>"
+        sx, " src %{customdata:.0f}mm: P=%{text}<extra></extra>"
       )
     )
   }
