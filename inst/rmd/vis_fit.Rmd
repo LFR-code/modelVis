@@ -74,10 +74,10 @@ has_sr     <- !is.null(mv$sr_params) &&
 ```{r child_recruitment, child=system.file("rmd", "child_recruitment.Rmd", package = "modelVis")}
 ```
 
-```{r child_sel, child=system.file("rmd", "child_selectivity.Rmd", package = "modelVis"), eval=!is.null(mv$selectivity_at_age) || !is.null(mv$selectivity_at_length)}
+```{r child_sel, child=system.file("rmd", "child_selectivity.Rmd", package = "modelVis"), eval=!is.null(mv$selectivity_at_age) || !is.null(mv$selectivity_at_length) || !is.null(mv$size_transition)}
 ```
 
-```{r child_lh, child=system.file("rmd", "child_life_history.Rmd", package = "modelVis"), eval=!is.null(mv$weight_at_age) || !is.null(mv$length_at_age) || !is.null(mv$age_length_key) || !is.null(mv$maturity_at_length)}
+```{r child_lh, child=system.file("rmd", "child_life_history.Rmd", package = "modelVis"), eval=!is.null(mv$weight_at_age) || !is.null(mv$length_at_age) || !is.null(mv$age_length_key) || !is.null(mv$maturity_at_length) || !is.null(mv$weight_at_length) || !is.null(mv$moult_probability)}
 ```
 
 ```{r child_ref, child=system.file("rmd", "child_reference_pts.Rmd", package = "modelVis"), eval=has_refpts}

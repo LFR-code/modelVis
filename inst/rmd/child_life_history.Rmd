@@ -65,7 +65,9 @@ modelVis::mv_config(p = p)
 
 ### Length-at-Age Distributions
 
-```{r prob_len_age, eval=!is.null(mv$age_length_key)}
+```{r prob_len_age, eval=!is.null(mv$age_length_key) && (is.null(meta$model_type) || meta$model_type != "siscaL")}
+tab_title <- if (!is.null(meta$model_type) && meta$model_type == "siscaL")
+               "Growth Transition Matrix" else "Length-at-Age Distributions"
 alk <- mv$age_length_key
 sc <- mv_sex_colours(sex_names = sexes)
 
@@ -115,7 +117,7 @@ if (length(plot_list) > 0) {
   )
   p_out <- layout(
     p = p_out,
-    title = "Length-at-Age Distributions"
+    title = tab_title
   )
   modelVis::mv_config(p = p_out)
 }
@@ -160,5 +162,55 @@ lay$title <- "Maturity at Length"
 p <- do.call(
   what = layout, args = c(list(p = p), lay)
 )
+modelVis::mv_config(p = p)
+```
+
+### Weight at Length
+
+```{r wl_plot, eval=!is.null(mv$weight_at_length)}
+wl <- mv$weight_at_length
+sc <- mv_sex_colours(sex_names = unique(wl$sex))
+p  <- plot_ly()
+for (sx in unique(wl$sex)) {
+  sub <- wl[wl$sex == sx, , drop = FALSE]
+  p <- add_lines(
+    p = p,
+    x = sub$length, y = sub$est,
+    name = sx,
+    line = list(color = sc[sx], width = 2),
+    hovertemplate = paste0(sx, " len %{x}: %{y:.4g}<extra></extra>")
+  )
+}
+lay <- modelVis::mv_layout()
+lay$xaxis$title <- "Length"
+lay$yaxis$title <- "Weight (kg)"
+lay$title       <- "Weight at Length"
+lay$showlegend  <- TRUE
+p <- do.call(what = layout, args = c(list(p = p), lay))
+modelVis::mv_config(p = p)
+```
+
+### Moulting Probability
+
+```{r pmoult_plot, eval=!is.null(mv$moult_probability)}
+pm <- mv$moult_probability
+sc <- mv_sex_colours(sex_names = unique(pm$sex))
+p  <- plot_ly()
+for (sx in unique(pm$sex)) {
+  sub <- pm[pm$sex == sx, , drop = FALSE]
+  p <- add_lines(
+    p = p,
+    x = sub$length, y = sub$est,
+    name = sx,
+    line = list(color = sc[sx], width = 2),
+    hovertemplate = paste0(sx, " len %{x}: %{y:.4f}<extra></extra>")
+  )
+}
+lay <- modelVis::mv_layout()
+lay$xaxis$title <- "Length"
+lay$yaxis$title <- "P(moult)"
+lay$title       <- "Moulting Probability"
+lay$showlegend  <- TRUE
+p <- do.call(what = layout, args = c(list(p = p), lay))
 modelVis::mv_config(p = p)
 ```

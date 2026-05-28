@@ -11,21 +11,33 @@ Row
 da <- mv$data_availability
 da$present_num <- as.integer(da$present)
 
+# Compute fractional-year x position for any row that has a quarter.
+da_has_q <- "quarter" %in% names(da) && any(!is.na(da$quarter))
+if (da_has_q) {
+  n_q_da   <- max(as.integer(da$quarter[!is.na(da$quarter)]), na.rm = TRUE)
+  da$x_pos <- ifelse(
+    !is.na(da$quarter),
+    da$year + (as.integer(da$quarter) - 1L) / n_q_da,
+    da$year
+  )
+} else {
+  da$x_pos <- da$year
+}
+
 fc        <- mv_fleet_colours(fleet_names = fleets)
-dtypes    <- rev(unique(da$datatype))
-da_stocks <- if ("stock" %in% names(da) && length(unique(da$stock)) > 1L) unique(da$stock) else NULL
+da_stocks <- if ("stock" %in% names(da) &&
+                 length(unique(da$stock)) > 1L)
+               intersect(areas, unique(da$stock)) else NULL
+
+dtype_order <- c("Catch", "Index", "Length comp")
+dtypes_used <- dtype_order[dtype_order %in% unique(da$datatype)]
+dtype_pos   <- setNames(seq_along(dtypes_used), dtypes_used)
+n_fl        <- length(fleets)
+fl_offsets  <- if (n_fl > 1L) seq(0.2, -0.2, length.out = n_fl) else 0
 
 if (!is.null(da_stocks)) {
-  # One subplot panel per stock; datatypes as y-rows, fleets jittered within each row.
-  # Datatype order (bottom to top): Catch → Index → Length comp.
-  dtype_order <- c("Catch", "Index", "Length comp")
-  dtypes_used <- dtype_order[dtype_order %in% unique(da$datatype)]
-  dtype_pos   <- setNames(seq_along(dtypes_used), dtypes_used)
-  n_fl        <- length(fleets)
-  fl_offsets  <- if (n_fl > 1L) seq(0.2, -0.2, length.out = n_fl) else 0
-
   stock_panels <- list()
-  shown_legs   <- character(0)   # track across ALL stock panels
+  shown_legs   <- character(0)
 
   for (si in seq_along(da_stocks)) {
     stk <- da_stocks[si]
@@ -39,14 +51,17 @@ if (!is.null(da_stocks)) {
         show_leg <- !(fl %in% shown_legs)
         if (show_leg) shown_legs <- c(shown_legs, fl)
         y_val <- dtype_pos[dt] + fl_offsets[j]
+        hover_x <- if (da_has_q && !is.na(sub$quarter[1L]))
+          paste0(sub$year, "-Q", sub$quarter) else as.character(sub$year)
         p <- add_markers(
           p = p,
-          x = sub$year,
+          x = sub$x_pos,
           y = rep(y_val, nrow(sub)),
           marker = list(color = fc[fl], size = 5, symbol = "circle"),
           name = fl, legendgroup = fl,
           showlegend = show_leg,
-          hovertemplate = paste0(fl, " ", dt, " %{x}<extra></extra>")
+          text = hover_x,
+          hovertemplate = paste0(fl, " ", dt, " %{text}<extra></extra>")
         )
       }
     }
@@ -56,7 +71,7 @@ if (!is.null(da_stocks)) {
     lay_s$yaxis$range    <- c(0.5, length(dtypes_used) + 0.5)
     lay_s$yaxis$title    <- ""
     lay_s$annotations    <- list(mv_top_label(label = stk))
-    lay_s$showlegend     <- FALSE   # showlegend set globally on subplot
+    lay_s$showlegend     <- FALSE
     lay_s$margin$l       <- 100
     p <- do.call(what = layout, args = c(list(p = p), lay_s))
     stock_panels[[length(stock_panels) + 1L]] <- p
@@ -76,13 +91,6 @@ if (!is.null(da_stocks)) {
   modelVis::mv_config(p = p_out)
 
 } else {
-  # Single-stock: flat chart, same dtype ordering and jitter as multi-stock
-  dtype_order <- c("Catch", "Index", "Length comp")
-  dtypes_used <- dtype_order[dtype_order %in% unique(da$datatype)]
-  dtype_pos   <- setNames(seq_along(dtypes_used), dtypes_used)
-  n_fl        <- length(fleets)
-  fl_offsets  <- if (n_fl > 1L) seq(0.2, -0.2, length.out = n_fl) else 0
-
   p          <- plot_ly()
   shown_legs <- character(0)
   for (j in seq_along(fleets)) {
@@ -93,14 +101,17 @@ if (!is.null(da_stocks)) {
       show_leg <- !(fl %in% shown_legs)
       if (show_leg) shown_legs <- c(shown_legs, fl)
       y_val <- dtype_pos[dt] + fl_offsets[j]
+      hover_x <- if (da_has_q && dt == "Length comp")
+        paste0(sub$year, "-Q", sub$quarter) else as.character(sub$year)
       p <- add_markers(
         p = p,
-        x = sub$year,
+        x = sub$x_pos,
         y = rep(y_val, nrow(sub)),
         marker = list(color = fc[fl], size = 5, symbol = "circle"),
         name = fl, legendgroup = fl,
         showlegend = show_leg,
-        hovertemplate = paste0(fl, " ", dt, " %{x}<extra></extra>")
+        text = hover_x,
+        hovertemplate = paste0(fl, " ", dt, " %{text}<extra></extra>")
       )
     }
   }

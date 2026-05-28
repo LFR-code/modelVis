@@ -154,7 +154,43 @@ if (!is.null(mv$len_comp_resids)) {
 ### Yearly Fits
 
 ```{r len_yearly_grid}
-plot_list <- list()
+n_col_yr   <- 8L
+lc_has_q   <- "quarter" %in% names(mv$len_comp_fits) &&
+              length(unique(mv$len_comp_fits$quarter)) > 1L
+
+# Selector widget + JS filter
+.mk_sel <- function(id, lbl, opts) {
+  opt_html <- paste0('<option value="', opts, '">', opts, '</option>',
+                     collapse = "")
+  htmltools::HTML(paste0(
+    '<label style="margin-right:14px;font-size:13px;">', lbl,
+    ' <select id="', id, '" onchange="filterLcYearly()"',
+    ' style="margin-left:4px;font-size:13px;">',
+    '<option value="">All</option>', opt_html, '</select></label>'
+  ))
+}
+lc_filter_js <- htmltools::tags$script(htmltools::HTML(
+  'function filterLcYearly() {
+    var fl  = document.getElementById("lcy_fleet").value;
+    var stk = document.getElementById("lcy_stock")
+              ? document.getElementById("lcy_stock").value : "";
+    var sx  = document.getElementById("lcy_sex").value;
+    document.querySelectorAll(".lcy-plot").forEach(function(d) {
+      var ok = (!fl  || d.dataset.fleet === fl) &&
+               (!stk || d.dataset.stock === stk) &&
+               (!sx  || d.dataset.sex   === sx);
+      d.style.display = ok ? "block" : "none";
+    });
+  }'
+))
+selectors <- htmltools::tagList(
+  .mk_sel("lcy_fleet", "Fleet:", len_fleets),
+  if (!is.null(len_stocks)) .mk_sel("lcy_stock", "Stock:", len_stocks) else NULL,
+  .mk_sel("lcy_sex",   "Sex:",   len_sexes)
+)
+
+# Build plots
+plot_info <- list()
 for (fl in len_fleets) {
   for (stk in if (!is.null(len_stocks)) len_stocks else list(NULL)) {
     for (sx in len_sexes) {
@@ -176,31 +212,50 @@ for (fl in len_fleets) {
         fl
       }
 
-      if ("quarter" %in% names(sub) && length(unique(sub$quarter)) > 1L) {
-        sub <- aggregate(
-          cbind(obs, pred) ~ length + year,
-          data  = sub,
-          FUN   = mean,
-          na.rm = TRUE
-        )
-      }
+      sub$year_q <- if (lc_has_q) paste0(sub$year, "-", sub$quarter) else
+                      as.character(sub$year)
+
       p <- mv_plot_comp_grid(
-        df      = sub,
-        bin_col = "length",
-        ylab    = "Proportion"
+        df             = sub,
+        bin_col        = "length",
+        ylab           = "Proportion",
+        ncol           = n_col_yr,
+        years_per_page = Inf,
+        year_col       = "year_q"
       )
-      p <- layout(p = p, title = lbl)
-      plot_list[[length(plot_list) + 1L]] <- p
+      p <- layout(p = p, title = lbl, margin = list(t = 50))
+      plot_info[[length(plot_info) + 1L]] <- list(
+        plot  = p,
+        fleet = fl,
+        stock = if (!is.null(stk)) stk else "",
+        sex   = sx
+      )
     }
   }
 }
-n_yr  <- length(unique(mv$len_comp_fits$year))
-h_yr  <- max(400L, 60L * n_yr + 100L)
-if (length(plot_list) == 1L) {
-  plot_list[[1]]
+
+n_yrq    <- if (lc_has_q) {
+  length(unique(paste0(mv$len_comp_fits$year, "-", mv$len_comp_fits$quarter)))
 } else {
-  htmltools::tagList(lapply(plot_list, function(p) {
-    htmltools::div(style = paste0("height:", h_yr, "px; margin-bottom:10px;"), p)
-  }))
+  length(unique(mv$len_comp_fits$year))
 }
+n_row_yr <- ceiling(n_yrq / n_col_yr)
+h_yr     <- max(200L, 100L * n_row_yr + 90L)
+
+plot_divs <- lapply(plot_info, function(info) {
+  htmltools::div(
+    class         = "lcy-plot",
+    `data-fleet`  = info$fleet,
+    `data-stock`  = info$stock,
+    `data-sex`    = info$sex,
+    style         = paste0("height:", h_yr, "px; margin-bottom:10px;"),
+    info$plot
+  )
+})
+
+htmltools::tagList(
+  htmltools::div(style = "margin-bottom:8px;", selectors),
+  lc_filter_js,
+  do.call(htmltools::tagList, plot_divs)
+)
 ```

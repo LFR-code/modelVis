@@ -80,31 +80,34 @@ mv_plot_comp_fit <- function(df, bin_col = "age",
 }
 
 
-#' Grid of composition fits across years
+#' Grid of composition fits across years (or year-quarters)
 #'
 #' Creates a subplot grid showing comp fits for multiple
-#' years. Observed proportions shown as grey bars,
+#' periods. Observed proportions shown as grey bars,
 #' predicted as coloured points + line.
 #'
 #' @param df A data.frame with columns for the bin
-#'   dimension, \code{year}, \code{obs}, \code{pred}.
+#'   dimension, a period column, \code{obs}, \code{pred}.
 #' @param bin_col Name of the bin column.
-#' @param years_per_page Number of years to show.
-#'   If more years exist, shows the most recent.
+#' @param years_per_page Number of periods to show.
+#'   Defaults to \code{Inf} (show all).
 #' @param ncol Number of subplot columns.
 #' @param ylab Y-axis label.
 #' @param pred_colour Colour for predicted points + line.
+#' @param year_col Name of the period column (default
+#'   \code{"year"}; pass \code{"year_q"} for quarterly).
 #' @return A plotly object.
 #' @export
 mv_plot_comp_grid <- function(df, bin_col = "age",
-                              years_per_page = 16,
+                              years_per_page = Inf,
                               ncol = 4,
                               ylab = "Proportion",
-                              pred_colour = "#1f77b4") {
-  all_years <- sort(unique(df$year))
+                              pred_colour = "#1f77b4",
+                              year_col = "year") {
+  all_years <- sort(unique(df[[year_col]]))
   n_years <- length(all_years)
 
-  show_years <- if (n_years <= years_per_page) {
+  show_years <- if (is.infinite(years_per_page) || n_years <= years_per_page) {
     all_years
   } else {
     tail(x = all_years, n = years_per_page)
@@ -115,7 +118,8 @@ mv_plot_comp_grid <- function(df, bin_col = "age",
   )
   for (i in seq_along(show_years)) {
     yr <- show_years[i]
-    sub <- df[df$year == yr, , drop = FALSE]
+    sub <- df[df[[year_col]] == yr, , drop = FALSE]
+    sub <- sub[order(sub[[bin_col]]), , drop = FALSE]
 
     p <- plot_ly(
       data = sub,
@@ -159,11 +163,21 @@ mv_plot_comp_grid <- function(df, bin_col = "age",
     )
 
     lay <- .mv_layout()
-    lay$annotations <- list(
-      mv_top_label(label = as.character(yr))
-    )
+    lay$annotations <- list(list(
+      text      = as.character(yr),
+      x         = 0.02,
+      y         = 0.97,
+      xref      = "paper",
+      yref      = "paper",
+      xanchor   = "left",
+      yanchor   = "top",
+      showarrow = FALSE,
+      font      = list(size = 9),
+      bgcolor   = "rgba(255,255,255,0.6)",
+      borderpad = 2L
+    ))
     lay$barmode <- "overlay"
-    lay$margin <- list(t = 25, r = 5, b = 5, l = 5)
+    lay$margin <- list(t = 5, r = 5, b = 5, l = 5)
     p <- do.call(
       what = layout,
       args = c(list(p = p), lay)

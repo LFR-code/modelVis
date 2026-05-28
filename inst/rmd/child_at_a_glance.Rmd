@@ -38,6 +38,20 @@ if (has_refpts && !is.null(mv$ref_points$lUmsy))
   p <- add_lines(p=p, x=sub$year, y=sub$est,
     line=list(color=col, width=2), name=lbl, showlegend=is.null(stk),
     hovertemplate=paste0(lbl, " %{x}: %{y:.3g}<extra></extra>"))
+  # Legal (fishable) biomass — siscaL only
+  if (!is.null(meta$model_type) && meta$model_type == "siscaL" &&
+      !is.null(mv$legal_biomass)) {
+    lb   <- mv$legal_biomass
+    lb_s <- if (!is.null(stk) && "stock" %in% names(lb))
+              lb[lb$stock == stk, , drop=FALSE] else lb
+    lb_s <- lb_s[order(lb_s$year), , drop=FALSE]
+    if (nrow(lb_s) > 0)
+      p <- add_lines(p=p, x=lb_s$year, y=lb_s$est,
+        line=list(color=col, width=2, dash="dash"),
+        name="Legal (fishable)", legendgroup="Legal",
+        showlegend=(is.null(stk) || si == 1L),
+        hovertemplate="Legal %{x}: %{y:.3g}<extra></extra>")
+  }
   if (!is.null(mv$vulnerable_biomass) && !is.null(mv$index_fits)) {
     sc <- mv_fleet_colours(fleet_names=survey_fleets)
     for (sf in survey_fleets) {
@@ -59,7 +73,8 @@ if (has_refpts && !is.null(mv$ref_points$lUmsy))
   }
   lay <- modelVis::mv_layout()
   if (show_label && !is.null(stk)) lay$annotations <- list(mv_top_label(label=stk))
-  lay$yaxis$title <- "Spawn. B"
+  lay$yaxis$title     <- "Spawn. B"
+  lay$yaxis$rangemode <- "tozero"
   do.call(layout, c(list(p=p), lay))
 }
 
@@ -84,7 +99,8 @@ if (has_refpts && !is.null(mv$ref_points$lUmsy))
       y0=mv$sr_params$R0, y1=mv$sr_params$R0,
       line=list(color="#999999", width=1.5, dash="dash")))
   lay <- modelVis::mv_layout()
-  lay$yaxis$title <- "Recruitment"
+  lay$yaxis$title     <- "Recruitment"
+  lay$yaxis$rangemode <- "tozero"
   lay$shapes <- rec_sh
   do.call(layout, c(list(p=p), lay))
 }
@@ -134,8 +150,9 @@ if (has_refpts && !is.null(mv$ref_points$lUmsy))
       hovertemplate=paste0(hr2_lbl, " %{x}: %{y:.4f}<extra></extra>"))
   }
   lay <- modelVis::mv_layout()
-  lay$xaxis$title <- "Year"
-  lay$yaxis$title <- hr_label
+  lay$xaxis$title     <- "Year"
+  lay$yaxis$title     <- hr_label
+  lay$yaxis$rangemode <- "tozero"
   lay$yaxis2 <- list(overlaying="y", side="right", title="Catch", showgrid=FALSE)
   lay$shapes  <- hr_shapes
   lay$barmode <- "overlay"
@@ -171,87 +188,84 @@ Row {.tabset}
 
 ### All Biomass Components
 
-```{r all_bio}
-p <- plot_ly()
+```{r all_bio, eval=is.null(meta$model_type) || meta$model_type != "siscaL"}
+sb      <- mv$spawning_biomass
+bio_stks <- if ("stock" %in% names(sb) && length(unique(sb$stock)) > 1L) unique(sb$stock) else NULL
+bio_pal  <- c("#d62728", "#1f77b4", "#ff7f0e", "#2ca02c", "#9467bd")
 
-# Spawning biomass (per stock when multi-stock)
-sb       <- mv$spawning_biomass
-sb_stks2 <- if ("stock" %in% names(sb) && length(unique(sb$stock)) > 1L) unique(sb$stock) else NULL
-sb_pal2  <- c("#d62728", "#1f77b4", "#ff7f0e", "#2ca02c", "#9467bd")
-for (s_i in seq_along(if (!is.null(sb_stks2)) sb_stks2 else list(NULL))) {
-  stk_s2  <- if (!is.null(sb_stks2)) sb_stks2[s_i] else NULL
-  sub_sb2 <- if (!is.null(stk_s2)) sb[sb$stock == stk_s2, , drop = FALSE] else sb
-  sub_sb2 <- sub_sb2[order(sub_sb2$year), , drop = FALSE]
-  col_s2  <- sb_pal2[((s_i - 1L) %% length(sb_pal2)) + 1L]
-  lbl_s2  <- if (!is.null(stk_s2)) paste("Spawning -", stk_s2) else "Spawning"
-  has_sb_ci2 <- "lwr" %in% names(sub_sb2) && any(!is.na(sub_sb2$lwr))
-  if (has_sb_ci2) {
-    p <- add_ribbons(
-      p = p, x = sub_sb2$year, ymin = sub_sb2$lwr, ymax = sub_sb2$upr,
+.bio_panel <- function(stk, si) {
+  has_stk <- !is.null(stk)
+  p <- plot_ly()
+
+  # Spawning biomass
+  sub_sb <- if (has_stk) sb[sb$stock == stk, , drop = FALSE] else sb
+  sub_sb <- sub_sb[order(sub_sb$year), , drop = FALSE]
+  if ("lwr" %in% names(sub_sb) && any(!is.na(sub_sb$lwr)))
+    p <- add_ribbons(p = p, x = sub_sb$year, ymin = sub_sb$lwr, ymax = sub_sb$upr,
       fillcolor = "rgba(214,39,40,0.15)", line = list(width = 0),
-      showlegend = FALSE, hoverinfo = "skip"
-    )
-  }
-  p <- add_lines(
-    p = p, x = sub_sb2$year, y = sub_sb2$est,
-    line = list(color = col_s2, width = 2), name = lbl_s2,
-    hovertemplate = paste0(lbl_s2, " %{x}: %{y:.3g}<extra></extra>")
-  )
-}
+      legendgroup = "Spawning", showlegend = FALSE, hoverinfo = "skip")
+  p <- add_lines(p = p, x = sub_sb$year, y = sub_sb$est,
+    line = list(color = "#d62728", width = 2), name = "Spawning",
+    legendgroup = "Spawning", showlegend = (!has_stk || si == 1L),
+    hovertemplate = "Spawning %{x}: %{y:.3g}<extra></extra>")
 
-# Legal biomass
-if (!is.null(mv$legal_biomass)) {
-  lb <- mv$legal_biomass
-  p <- add_lines(
-    p = p, x = lb$year, y = lb$est,
-    line = list(color = "#1f77b4", width = 2),
-    name = "Legal",
-    hovertemplate = paste0(
-      "Legal B %{x}: %{y:.3g}<extra></extra>"
-    )
-  )
-}
-
-# Sublegal biomass
-if (!is.null(mv$sublegal_biomass)) {
-  slb <- mv$sublegal_biomass
-  p <- add_lines(
-    p = p, x = slb$year, y = slb$est,
-    line = list(color = "#ff7f0e", width = 2),
-    name = "Sublegal",
-    hovertemplate = paste0(
-      "Sublegal B %{x}: %{y:.3g}<extra></extra>"
-    )
-  )
-}
-
-# Total biomass (per stock when multi-stock)
-if (!is.null(mv$total_biomass)) {
-  tb      <- mv$total_biomass
-  tb_stks <- if ("stock" %in% names(tb) && length(unique(tb$stock)) > 1L) unique(tb$stock) else NULL
-  for (s_i in seq_along(if (!is.null(tb_stks)) tb_stks else list(NULL))) {
-    stk_t  <- if (!is.null(tb_stks)) tb_stks[s_i] else NULL
-    sub_tb <- if (!is.null(stk_t)) tb[tb$stock == stk_t, , drop = FALSE] else tb
+  # Total biomass
+  if (!is.null(mv$total_biomass)) {
+    tb     <- mv$total_biomass
+    has_tb_stk <- "stock" %in% names(tb) && length(unique(tb$stock)) > 1L
+    sub_tb <- if (has_stk && has_tb_stk) tb[tb$stock == stk, , drop = FALSE] else tb
     sub_tb <- sub_tb[order(sub_tb$year), , drop = FALSE]
-    lbl_t  <- if (!is.null(stk_t)) paste("Total -", stk_t) else "Total"
-    col_t  <- sb_pal2[((s_i - 1L) %% length(sb_pal2)) + 1L]
-    p <- add_lines(
-      p = p, x = sub_tb$year, y = sub_tb$est,
-      line = list(color = col_t, width = 2, dash = "dot"),
-      name = lbl_t,
-      hovertemplate = paste0(lbl_t, " %{x}: %{y:.3g}<extra></extra>")
-    )
+    p <- add_lines(p = p, x = sub_tb$year, y = sub_tb$est,
+      line = list(color = "#d62728", width = 2, dash = "dot"), name = "Total",
+      legendgroup = "Total", showlegend = (!has_stk || si == 1L),
+      hovertemplate = "Total %{x}: %{y:.3g}<extra></extra>")
   }
+
+  # Legal biomass
+  if (!is.null(mv$legal_biomass)) {
+    lb     <- mv$legal_biomass
+    has_lb_stk <- "stock" %in% names(lb) && length(unique(lb$stock)) > 1L
+    sub_lb <- if (has_stk && has_lb_stk) lb[lb$stock == stk, , drop = FALSE] else lb
+    sub_lb <- sub_lb[order(sub_lb$year), , drop = FALSE]
+    if (nrow(sub_lb) > 0)
+      p <- add_lines(p = p, x = sub_lb$year, y = sub_lb$est,
+        line = list(color = "#1f77b4", width = 2), name = "Legal",
+        legendgroup = "Legal", showlegend = (!has_stk || si == 1L),
+        hovertemplate = "Legal %{x}: %{y:.3g}<extra></extra>")
+  }
+
+  # Sublegal biomass
+  if (!is.null(mv$sublegal_biomass)) {
+    slb     <- mv$sublegal_biomass
+    has_slb_stk <- "stock" %in% names(slb) && length(unique(slb$stock)) > 1L
+    sub_slb <- if (has_stk && has_slb_stk) slb[slb$stock == stk, , drop = FALSE] else slb
+    sub_slb <- sub_slb[order(sub_slb$year), , drop = FALSE]
+    if (nrow(sub_slb) > 0)
+      p <- add_lines(p = p, x = sub_slb$year, y = sub_slb$est,
+        line = list(color = "#ff7f0e", width = 2), name = "Sublegal",
+        legendgroup = "Sublegal", showlegend = (!has_stk || si == 1L),
+        hovertemplate = "Sublegal %{x}: %{y:.3g}<extra></extra>")
+  }
+
+  lay <- modelVis::mv_layout()
+  lay$xaxis$title <- "Year"
+  lay$yaxis$title <- "Biomass"
+  lay$updatemenus <- mv_log_linear_buttons()
+  if (has_stk) lay$annotations <- list(mv_top_label(label = stk))
+  do.call(layout, c(list(p = p), lay))
 }
 
-lay <- modelVis::mv_layout()
-lay$xaxis$title <- "Year"
-lay$yaxis$title <- "Biomass"
-lay$showlegend <- TRUE
-lay$updatemenus <- mv_log_linear_buttons()
-
-p <- do.call(
-  what = layout, args = c(list(p = p), lay)
-)
-modelVis::mv_config(p = p)
+if (!is.null(bio_stks)) {
+  bio_pans <- lapply(seq_along(bio_stks), function(i) .bio_panel(bio_stks[i], i))
+  p_out <- do.call(subplot, c(bio_pans, list(
+    nrows = 1L, shareX = TRUE, shareY = FALSE,
+    titleX = TRUE, titleY = TRUE, margin = 0.04
+  )))
+  p_out <- layout(p = p_out, showlegend = TRUE)
+  modelVis::mv_config(p = p_out)
+} else {
+  p_out <- .bio_panel(NULL, 1L)
+  p_out <- layout(p = p_out, showlegend = TRUE)
+  modelVis::mv_config(p = p_out)
+}
 ```

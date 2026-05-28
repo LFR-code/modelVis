@@ -100,6 +100,141 @@ mv_plot_selectivity(
 )
 ```
 
+### Growth Transitions
+
+```{r growth_trans, eval=!is.null(mv$size_transition)}
+gt   <- mv$size_transition
+stp  <- mv$size_transition_params   # NULL for non-siscaL models
+
+# Trim bins to start at hypo$recLen (recruit bin from control file)
+all_bins <- sort(unique(c(gt$from_length, gt$to_length)))
+rec_lb   <- if (!is.null(stp) && !is.null(stp$rec_len)) stp$rec_len else -Inf
+bins     <- all_bins[all_bins >= rec_lb]
+n_l      <- length(bins)
+
+gt_stocks <- if ("stock" %in% names(gt) && length(unique(gt$stock)) > 1L)
+               unique(gt$stock) else NULL
+gt_sexes  <- unique(gt$sex)
+
+bin_step   <- if (n_l > 1L) min(diff(bins)) else 1
+src_width  <- 0.6  * bin_step   # grey source indicator bar width
+bar_width  <- 0.3  * bin_step   # coloured transition bar width
+sex_offset <- 0.15 * bin_step   # ± x offset separating male/female bars
+
+make_gt_panel <- function(stk, p_idx) {
+  sub_stk <- if (!is.null(stk)) gt[gt$stock == stk, , drop = FALSE] else gt
+
+  make_mat <- function(sx) {
+    sub <- sub_stk[sub_stk$sex == sx, , drop = FALSE]
+    mat <- matrix(0, nrow = n_l, ncol = n_l)
+    for (r in seq_len(nrow(sub))) {
+      ri <- match(sub$to_length[r],   bins)
+      ci <- match(sub$from_length[r], bins)
+      if (!is.na(ri) && !is.na(ci)) mat[ri, ci] <- sub$est[r]
+    }
+    mat  # mat[dest, source]
+  }
+
+  p <- plot_ly()
+
+  # Dummy traces placed outside the fixed axis range so they are clipped from
+  # the plot but still generate full-opacity legend entries.
+  if (!is.null(stp) && p_idx == 1L) {
+    ox <- min(bins) - 1e4   # x coordinate well outside visible range
+    p <- add_lines(p = p, x = c(ox, ox + 1), y = c(-2, -1),
+      line = list(color = "steelblue", dash = "dash", width = 1.5),
+      name = "Linf (male)", showlegend = TRUE)
+    p <- add_lines(p = p, x = c(ox, ox + 1), y = c(-2, -1),
+      line = list(color = "salmon", dash = "dash", width = 1.5),
+      name = "Linf (female)", showlegend = TRUE)
+    p <- add_lines(p = p, x = c(ox, ox + 1), y = c(-2, -1),
+      line = list(color = "#666666", dash = "longdash", width = 1.5),
+      name = "L50", showlegend = TRUE)
+    p <- add_lines(p = p, x = c(ox, ox + 1), y = c(-2, -1),
+      line = list(color = "#666666", dash = "dot", width = 1.5),
+      name = "Lrec", showlegend = TRUE)
+  }
+
+  p <- add_bars(
+    p = p,
+    x = bins, y = rep(0.8, n_l), base = as.numeric(0:(n_l - 1L)),
+    width = rep(src_width, n_l),
+    marker = list(color = "rgba(100,100,100,0.35)"),
+    name = "Source", showlegend = (p_idx == 1L), hoverinfo = "skip"
+  )
+
+  sex_colours <- c("steelblue", "salmon")
+  for (xi in seq_along(gt_sexes)) {
+    sx      <- gt_sexes[xi]
+    g_mat   <- make_mat(sx)
+    offset  <- if (xi == 1L) -sex_offset else sex_offset
+    x_bars  <- rep(bins + offset, n_l)
+    base_b  <- rep(as.numeric(0:(n_l - 1L)), each = n_l)
+    y_bars  <- 0.8 * as.vector(g_mat)
+    src_len <- rep(bins, each = n_l)   # source bin length for each bar
+    p <- add_bars(
+      p = p,
+      x = x_bars, y = y_bars, base = base_b,
+      customdata = src_len,
+      width = rep(bar_width, length(x_bars)),
+      name = sx, marker = list(color = sex_colours[xi]),
+      showlegend = (is.null(stk) || p_idx == 1L),
+      legendgroup = sx,
+      hovertemplate = paste0(
+        sx, " src %{customdata:.0f}mm: P=%{y:.4f}<extra></extra>"
+      )
+    )
+  }
+
+  shapes <- list()
+  if (!is.null(stp)) {
+    pi <- if (!is.null(stk)) match(stk, stp$stock_names) else 1L
+    shapes <- list(
+      list(type = "line", x0 = stp$Linf[1L, pi], x1 = stp$Linf[1L, pi],
+           y0 = 0, y1 = n_l, line = list(color = "steelblue", dash = "dash",    width = 1.5)),
+      list(type = "line", x0 = stp$Linf[2L, pi], x1 = stp$Linf[2L, pi],
+           y0 = 0, y1 = n_l, line = list(color = "salmon",    dash = "dash",    width = 1.5)),
+      list(type = "line", x0 = stp$l50[pi],       x1 = stp$l50[pi],
+           y0 = 0, y1 = n_l, line = list(color = "#666666",   dash = "longdash",width = 1.5)),
+      list(type = "line", x0 = stp$Linit[pi],     x1 = stp$Linit[pi],
+           y0 = 0, y1 = n_l, line = list(color = "#666666",   dash = "dot",     width = 1.5))
+    )
+  }
+
+  lay <- modelVis::mv_layout()
+  lay$xaxis$title    <- "Length at time step i+1 (mm)"
+  lay$yaxis$title    <- "Length at time step i (mm)"
+  lay$yaxis$tickvals <- (0:(n_l - 1L)) + 0.5
+  lay$yaxis$ticktext <- as.character(bins)
+  lay$yaxis$range    <- c(0, n_l)
+  lay$xaxis$range    <- c(min(bins) - 5, max(bins) + 5)
+  lay$barmode        <- "overlay"
+  lay$showlegend     <- TRUE
+  lay$legend         <- list(itemclick = FALSE, itemdoubleclick = FALSE)
+  lay$shapes         <- shapes
+  if (!is.null(stk)) lay$annotations <- list(mv_top_label(label = stk))
+  do.call(layout, c(list(p = p), lay))
+}
+
+stk_list <- if (!is.null(gt_stocks)) gt_stocks else list(NULL)
+panels   <- lapply(seq_along(stk_list), function(i)
+  make_gt_panel(stk_list[[i]], i))
+
+n_panels <- length(panels)
+if (n_panels == 1L) {
+  modelVis::mv_config(panels[[1L]])
+} else {
+  p_out <- do.call(subplot, c(panels, list(
+    nrows = 1L, shareX = FALSE, shareY = FALSE,
+    titleX = TRUE, titleY = TRUE, margin = 0.05,
+    widths = rep(1 / n_panels, n_panels)
+  )))
+  p_out <- layout(p_out,
+    legend = list(itemclick = FALSE, itemdoubleclick = FALSE))
+  modelVis::mv_config(p_out)
+}
+```
+
 ### Discard Proportions at Age
 
 ```{r disc_comp, eval=!is.null(mv$discard_comp_fits)}
