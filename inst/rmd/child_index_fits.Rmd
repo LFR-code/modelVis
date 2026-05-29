@@ -48,11 +48,22 @@ make_fit_panel <- function(fl, stk, has_stk, panel_lbl) {
     p_fit <- add_lines(p = p_fit, x = pred_sub$year, y = pred_sub$pred,
       line = list(color = fc[fl], width = 2), showlegend = FALSE,
       hovertemplate = "Pred %{x}: %{y:.3g}<extra></extra>")
-  if (nrow(obs_sub) > 0)
+  if (nrow(obs_sub) > 0) {
+    has_ci <- "obs_lwr" %in% names(obs_sub) && any(!is.na(obs_sub$obs_lwr))
     p_fit <- add_markers(p = p_fit, x = obs_sub$year, y = obs_sub$obs,
       marker = list(color = fc[fl], size = 6, line = list(color = "white", width = 0.5)),
+      error_y = if (has_ci) list(
+        type      = "data",
+        symmetric = FALSE,
+        array     = obs_sub$obs_upr - obs_sub$obs,
+        arrayminus = obs_sub$obs - obs_sub$obs_lwr,
+        color     = fc[fl],
+        thickness = 1,
+        width     = 4
+      ) else NULL,
       showlegend = FALSE,
       hovertemplate = "Obs %{x}: %{y:.3g}<extra></extra>")
+  }
   lay_fit <- modelVis::mv_layout()
   lay_fit$annotations <- list(mv_top_label(label = panel_lbl))
   lay_fit$yaxis$title <- "Index"
