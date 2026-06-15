@@ -15,6 +15,8 @@
 #' @param probs Numeric vector of length 3: lower, median,
 #'   upper quantile probabilities for simulation envelopes.
 #'   Default \code{c(0.025, 0.5, 0.975)}.
+#' @param perf_stats Optional data frame of pre-computed performance
+#'   statistics (one row) passed through to \code{extract.ms3Blob}.
 #' @param output_file Path for the output HTML file.
 #'   If NULL, opens an interactive viewer.
 #' @return Invisibly returns the path to the rendered

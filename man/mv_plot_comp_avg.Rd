@@ -4,7 +4,13 @@
 \alias{mv_plot_comp_avg}
 \title{Average composition fit}
 \usage{
-mv_plot_comp_avg(df, bin_col = "age", ylab = "Mean proportion", title = NULL)
+mv_plot_comp_avg(
+  df,
+  bin_col = "age",
+  ylab = "Mean proportion",
+  title = NULL,
+  pred_colour = "#1f77b4"
+)
 }
 \arguments{
 \item{df}{A data.frame with bin, \code{obs}, \code{pred}
@@ -15,11 +21,14 @@ columns.}
 \item{ylab}{Y-axis label.}
 
 \item{title}{Plot title.}
+
+\item{pred_colour}{Colour for predicted.}
 }
 \value{
 A plotly object.
 }
 \description{
 Creates a plot of mean observed and predicted
-composition across all years.
+composition across all years. Grey bars for observed,
+coloured points + line for predicted.
 }

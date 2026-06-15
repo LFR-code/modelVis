@@ -15,67 +15,143 @@ if (nrow(catch_fl) > 0) {
   has_catch_stock <- "stock" %in% names(catch_fl) && length(unique(catch_fl$stock)) > 1L
   catch_stocks    <- if (has_catch_stock) unique(catch_fl$stock) else NULL
   fc              <- mv_fleet_colours(fleet_names = comm_fleets)
+  has_catch_q     <- "quarter" %in% names(catch_fl) && length(unique(catch_fl$quarter)) > 1L
+  c_q_symbols     <- c("circle-open", "square-open", "diamond-open", "triangle-up-open")
+  c_yr_ticks      <- sort(unique(catch_fl$year))
 
-  if (has_catch_stock) {
-    all_panels <- list()
-    for (fl in comm_fleets) {
-      sub <- catch_fl[catch_fl$fleet == fl, , drop = FALSE]
-      for (stk in catch_stocks) {
-        stk_sub  <- sub[sub$stock == stk, , drop = FALSE]
-        panel_lbl <- if (length(comm_fleets) > 1L) paste(fl, stk, sep = " - ") else stk
-        p <- plot_ly()
-        pred_sub <- stk_sub[!is.na(stk_sub$pred), , drop = FALSE]
-        if (nrow(pred_sub) > 0)
-          p <- add_lines(p = p, x = pred_sub$year, y = pred_sub$pred,
+  # Returns list(p, n_traces, idx_single, idx_q_pred) so caller can attach toggle buttons.
+  make_catch_panel <- function(fl, stk, panel_lbl) {
+    sub          <- if (!is.null(stk)) catch_fl[catch_fl$fleet == fl & catch_fl$stock == stk, , drop = FALSE] else catch_fl[catch_fl$fleet == fl, , drop = FALSE]
+    x_col        <- if (has_catch_q) "x_pos" else "year"
+    quarters     <- if (has_catch_q) sort(unique(sub$quarter)) else 1L
+    p            <- plot_ly()
+    trace_cursor <- 0L
+    idx_single   <- NA_integer_
+    idx_q_pred   <- integer(0)
+
+    # Single chronological pred line (visible by default).
+    all_pred <- sub[!is.na(sub$pred), , drop = FALSE]
+    all_pred <- all_pred[order(all_pred[[x_col]]), , drop = FALSE]
+    if (nrow(all_pred) > 0) {
+      p <- add_lines(p = p, x = all_pred[[x_col]], y = all_pred$pred,
+        line = list(color = fc[fl], width = 2), showlegend = FALSE,
+        visible = TRUE,
+        hovertemplate = "Pred %{x:.2f}: %{y:.3g}<extra></extra>")
+      idx_single   <- trace_cursor
+      trace_cursor <- trace_cursor + 1L
+    }
+
+    # Per-quarter pred lines (hidden by default; toggled on when user switches).
+    if (has_catch_q) {
+      for (q in quarters) {
+        q_sub    <- sub[sub$quarter == q, , drop = FALSE]
+        pred_sub <- q_sub[!is.na(q_sub$pred), , drop = FALSE]
+        if (nrow(pred_sub) > 0) {
+          p <- add_lines(p = p, x = pred_sub[[x_col]], y = pred_sub$pred,
             line = list(color = fc[fl], width = 2), showlegend = FALSE,
-            hovertemplate = paste0("Pred %{x}: %{y:.3g}<extra></extra>"))
-        obs_sub <- stk_sub[!is.na(stk_sub$obs) & stk_sub$obs > 0, , drop = FALSE]
-        if (nrow(obs_sub) > 0)
-          p <- add_markers(p = p, x = obs_sub$year, y = obs_sub$obs,
-            marker = list(color = fc[fl], size = 5, symbol = "circle-open",
-                          line = list(color = fc[fl], width = 1.5)),
-            showlegend = FALSE,
-            hovertemplate = paste0("Obs %{x}: %{y:.3g}<extra></extra>"))
-        lay <- modelVis::mv_layout()
-        lay$annotations <- list(mv_top_label(label = panel_lbl))
-        lay$yaxis$title <- "Landings"
-        p <- do.call(what = layout, args = c(list(p = p), lay))
-        all_panels[[length(all_panels) + 1L]] <- p
+            visible = FALSE,
+            hovertemplate = paste0("Q", q, " Pred %{x:.2f}: %{y:.3g}<extra></extra>"))
+          idx_q_pred   <- c(idx_q_pred, trace_cursor)
+          trace_cursor <- trace_cursor + 1L
+        }
       }
     }
-    p_out <- do.call(subplot, c(all_panels, list(
+
+    # Per-quarter obs markers (always visible).
+    for (q in quarters) {
+      q_sub   <- if (has_catch_q) sub[sub$quarter == q, , drop = FALSE] else sub
+      q_pfx   <- if (has_catch_q) paste0("Q", q, " ") else ""
+      obs_sub <- q_sub[!is.na(q_sub$obs) & q_sub$obs > 0, , drop = FALSE]
+      if (nrow(obs_sub) > 0) {
+        p <- add_markers(p = p, x = obs_sub[[x_col]], y = obs_sub$obs,
+          marker = list(color = fc[fl], size = 5,
+                        symbol = if (has_catch_q) c_q_symbols[q] else "circle-open",
+                        line = list(color = fc[fl], width = 1.5)),
+          showlegend = FALSE,
+          hovertemplate = paste0(q_pfx, "Obs %{x:.2f}: %{y:.3g}<extra></extra>"))
+        trace_cursor <- trace_cursor + 1L
+      }
+    }
+
+    lay <- modelVis::mv_layout()
+    lay$annotations <- list(mv_top_label(label = panel_lbl))
+    lay$yaxis$title <- "Landings"
+    if (has_catch_q) {
+      lay$xaxis$tickmode <- "array"
+      lay$xaxis$tickvals <- as.list(c_yr_ticks)
+      lay$xaxis$ticktext <- as.list(as.character(c_yr_ticks))
+    }
+
+    list(
+      p          = do.call(what = layout, args = c(list(p = p), lay)),
+      n_traces   = trace_cursor,
+      idx_single = idx_single,
+      idx_q_pred = idx_q_pred
+    )
+  }
+
+  # Attaches "Single line" / "Per quarter" toggle buttons to a subplot.
+  # panel_results: list of make_catch_panel() return values.
+  # offsets: list of integer offsets (0-based) for each panel's first trace in the subplot.
+  add_line_toggle <- function(p, panel_results, offsets) {
+    toggle_idxs <- unlist(mapply(function(res, off) {
+      has_s <- !is.na(res$idx_single)
+      n_q   <- length(res$idx_q_pred)
+      if (has_s && n_q > 0) c(res$idx_single, res$idx_q_pred) + off else integer(0)
+    }, panel_results, offsets, SIMPLIFY = FALSE))
+    if (length(toggle_idxs) == 0L) return(p)
+
+    vis_s <- unlist(lapply(panel_results, function(res) {
+      n_q <- length(res$idx_q_pred)
+      if (!is.na(res$idx_single) && n_q > 0) c(TRUE, rep(FALSE, n_q)) else integer(0)
+    }))
+    vis_q <- unlist(lapply(panel_results, function(res) {
+      n_q <- length(res$idx_q_pred)
+      if (!is.na(res$idx_single) && n_q > 0) c(FALSE, rep(TRUE, n_q)) else integer(0)
+    }))
+
+    layout(p, updatemenus = list(list(
+      type      = "buttons",
+      direction = "right",
+      active    = 0L,
+      x = 0.0, xanchor = "left", y = 1.08, yanchor = "bottom",
+      pad = list(r = 6, t = 4),
+      buttons = list(
+        list(label = "Single line", method = "restyle",
+             args = list(list(visible = as.list(vis_s)), as.list(toggle_idxs))),
+        list(label = "Per quarter", method = "restyle",
+             args = list(list(visible = as.list(vis_q)), as.list(toggle_idxs)))
+      )
+    )))
+  }
+
+  if (has_catch_stock) {
+    all_results <- list()
+    for (fl in comm_fleets)
+      for (stk in catch_stocks)
+        all_results[[length(all_results) + 1L]] <- make_catch_panel(
+          fl, stk, if (length(comm_fleets) > 1L) paste(fl, stk, sep = " - ") else stk)
+    p_out <- do.call(subplot, c(lapply(all_results, `[[`, "p"), list(
       nrows = length(comm_fleets), shareX = TRUE, shareY = FALSE,
       titleX = FALSE, titleY = TRUE, margin = 0.04
     )))
+    if (has_catch_q) {
+      counts  <- sapply(all_results, `[[`, "n_traces")
+      offsets <- as.list(cumsum(c(0L, counts[-length(counts)])))
+      p_out <- add_line_toggle(p_out, all_results, offsets)
+    }
     p_out <- layout(p = p_out, xaxis = list(title = "Year"))
     modelVis::mv_config(p = p_out)
-
   } else {
-    plot_list <- list()
-    for (fl in comm_fleets) {
-      sub      <- catch_fl[catch_fl$fleet == fl, , drop = FALSE]
-      p        <- plot_ly()
-      pred_sub <- sub[!is.na(sub$pred), , drop = FALSE]
-      if (nrow(pred_sub) > 0)
-        p <- add_lines(p = p, x = pred_sub$year, y = pred_sub$pred,
-          line = list(color = fc[fl], width = 2), showlegend = FALSE,
-          hovertemplate = paste0("Pred %{x}: %{y:.3g}<extra></extra>"))
-      obs_sub <- sub[!is.na(sub$obs) & sub$obs > 0, , drop = FALSE]
-      if (nrow(obs_sub) > 0)
-        p <- add_markers(p = p, x = obs_sub$year, y = obs_sub$obs,
-          marker = list(color = fc[fl], size = 5, symbol = "circle-open",
-                        line = list(color = fc[fl], width = 1.5)),
-          showlegend = FALSE,
-          hovertemplate = paste0("Obs %{x}: %{y:.3g}<extra></extra>"))
-      lay <- modelVis::mv_layout()
-      lay$annotations <- list(mv_top_label(label = fl))
-      lay$yaxis$title <- "Landings"
-      p <- do.call(what = layout, args = c(list(p = p), lay))
-      plot_list[[length(plot_list) + 1L]] <- p
-    }
-    p_out <- do.call(subplot, c(plot_list, list(
-      nrows = length(plot_list), shareX = TRUE, titleY = TRUE, margin = 0.04
+    all_results <- lapply(comm_fleets, function(fl) make_catch_panel(fl, NULL, fl))
+    p_out <- do.call(subplot, c(lapply(all_results, `[[`, "p"), list(
+      nrows = length(all_results), shareX = TRUE, titleY = TRUE, margin = 0.04
     )))
+    if (has_catch_q) {
+      counts  <- sapply(all_results, `[[`, "n_traces")
+      offsets <- as.list(cumsum(c(0L, counts[-length(counts)])))
+      p_out <- add_line_toggle(p_out, all_results, offsets)
+    }
     p_out <- layout(p = p_out, xaxis = list(title = "Year"))
     modelVis::mv_config(p = p_out)
   }

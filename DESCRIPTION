@@ -16,7 +16,6 @@ Description: Generates interactive HTML flexdashboard reports
 License: GPL (>= 3)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
 Imports:
     plotly,
     rmarkdown,
@@ -33,3 +32,4 @@ Suggests:
     testthat (>= 3.0.0)
 VignetteBuilder: knitr
 Config/testthat/edition: 3
+Config/roxygen2/version: 8.0.0

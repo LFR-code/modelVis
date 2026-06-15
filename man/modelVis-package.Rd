@@ -6,10 +6,15 @@
 \alias{modelVis-package}
 \title{modelVis: Interactive Diagnostics Dashboards for Stock Assessment Models}
 \description{
-Generates interactive HTML flexdashboard reports for stock assessment model diagnostics. Converts raw model output into standardised data structures and renders navigable dashboards with plotly visualisations. Currently supports sableOpMod with planned support for SISCA models.
+Generates interactive HTML flexdashboard reports for stock assessment model diagnostics and MSE simulation reports. Converts raw model output into standardised data structures and renders navigable dashboards with plotly visualisations. Supports sableOpMod assessment models and MS3 closed-loop simulation blobs.
 }
 \author{
 \strong{Maintainer}: Samuel Johnson \email{sdnjohnson@landmarkfisheries.com}
+
+Authors:
+\itemize{
+  \item Samuel Johnson \email{sdnjohnson@landmarkfisheries.com}
+}
 
 }
 \keyword{internal}

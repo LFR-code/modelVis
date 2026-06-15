@@ -9,8 +9,7 @@ mv_plot_comp_fit(
   bin_col = "age",
   ylab = "Proportion",
   title = NULL,
-  obs_colour = "#1f77b4",
-  pred_colour = "#d62728"
+  pred_colour = "#1f77b4"
 )
 }
 \arguments{
@@ -25,15 +24,13 @@ and \code{pred}.}
 
 \item{title}{Plot title.}
 
-\item{obs_colour}{Colour for observed bars.}
-
-\item{pred_colour}{Colour for predicted line.}
+\item{pred_colour}{Colour for predicted points + line.}
 }
 \value{
 A plotly object.
 }
 \description{
-Creates a plotly plot showing observed (bars) and
-predicted (line) proportions at age or length for a
-single year/fleet combination.
+Creates a plotly plot showing observed (grey bars) and
+predicted (coloured points + line) proportions at age
+or length for a single year/fleet combination.
 }

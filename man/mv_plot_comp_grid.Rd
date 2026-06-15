@@ -2,32 +2,41 @@
 % Please edit documentation in R/plot_comp.R
 \name{mv_plot_comp_grid}
 \alias{mv_plot_comp_grid}
-\title{Grid of composition fits across years}
+\title{Grid of composition fits across years (or year-quarters)}
 \usage{
 mv_plot_comp_grid(
   df,
   bin_col = "age",
-  years_per_page = 12,
+  years_per_page = Inf,
   ncol = 4,
-  ylab = "Proportion"
+  ylab = "Proportion",
+  pred_colour = "#1f77b4",
+  year_col = "year"
 )
 }
 \arguments{
 \item{df}{A data.frame with columns for the bin
-dimension, \code{year}, \code{obs}, \code{pred}.}
+dimension, a period column, \code{obs}, \code{pred}.}
 
 \item{bin_col}{Name of the bin column.}
 
-\item{years_per_page}{Number of years to show per page.}
+\item{years_per_page}{Number of periods to show.
+Defaults to \code{Inf} (show all).}
 
 \item{ncol}{Number of subplot columns.}
 
 \item{ylab}{Y-axis label.}
+
+\item{pred_colour}{Colour for predicted points + line.}
+
+\item{year_col}{Name of the period column (default
+\code{"year"}; pass \code{"year_q"} for quarterly).}
 }
 \value{
 A plotly object.
 }
 \description{
 Creates a subplot grid showing comp fits for multiple
-years, with year animation buttons.
+periods. Observed proportions shown as grey bars,
+predicted as coloured points + line.
 }

@@ -17,6 +17,9 @@
 #' @param probs Numeric vector of length 3: lower quantile,
 #'   median, upper quantile. Default
 #'   \code{c(0.025, 0.5, 0.975)}.
+#' @param perf_stats Optional data frame of pre-computed performance
+#'   statistics (one row). Column names matching recognised metric
+#'   labels are displayed in the Performance tab.
 #' @param ... Additional arguments (ignored).
 #' @return An object of class \code{c("mv_sim", "mv")}.
 #' @export
