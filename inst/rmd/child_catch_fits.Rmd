@@ -16,7 +16,9 @@ if (nrow(catch_fl) > 0) {
   catch_stocks    <- if (has_catch_stock) unique(catch_fl$stock) else NULL
   fc              <- mv_fleet_colours(fleet_names = comm_fleets)
   has_catch_q     <- "quarter" %in% names(catch_fl) && length(unique(catch_fl$quarter)) > 1L
-  c_q_symbols     <- c("circle-open", "square-open", "diamond-open", "triangle-up-open")
+  c_q_symbols     <- c("circle-open", "square-open", "diamond-open", "triangle-up-open",
+                       "cross-open", "x-open", "pentagon-open", "hexagon-open",
+                       "star-open", "hourglass-open", "bowtie-open", "asterisk-open")
   c_yr_ticks      <- sort(unique(catch_fl$year))
 
   # Returns list(p, n_traces, idx_single, idx_q_pred) so caller can attach toggle buttons.
@@ -65,7 +67,7 @@ if (nrow(catch_fl) > 0) {
       if (nrow(obs_sub) > 0) {
         p <- add_markers(p = p, x = obs_sub[[x_col]], y = obs_sub$obs,
           marker = list(color = fc[fl], size = 5,
-                        symbol = if (has_catch_q) c_q_symbols[q] else "circle-open",
+                        symbol = if (has_catch_q) c_q_symbols[(q - 1L) %% length(c_q_symbols) + 1L] else "circle-open",
                         line = list(color = fc[fl], width = 1.5)),
           showlegend = FALSE,
           hovertemplate = paste0(q_pfx, "Obs %{x:.2f}: %{y:.3g}<extra></extra>"))

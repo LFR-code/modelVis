@@ -33,7 +33,9 @@ idx_stocks      <- if (has_idx_stock) unique(idx$stock) else NA_character_
 fleet_plots     <- list()
 
 has_idx_q  <- "quarter" %in% names(idx) && length(unique(idx$quarter)) > 1L
-q_symbols  <- c("circle", "square", "diamond", "triangle-up")
+q_symbols  <- c("circle", "square", "diamond", "triangle-up",
+                "cross", "x", "pentagon", "hexagon",
+                "star", "hourglass", "bowtie", "asterisk")
 yr_ticks   <- sort(unique(idx$year))
 
 # Returns list(p, n_traces, idx_single, idx_q_pred) so caller can compute toggle indices.
@@ -94,7 +96,7 @@ make_fit_panel <- function(fl, stk, has_stk, panel_lbl) {
       has_ci <- "obs_lwr" %in% names(obs_sub) && any(!is.na(obs_sub$obs_lwr))
       p_fit <- add_markers(p = p_fit, x = obs_sub[[x_col]], y = obs_sub$obs,
         marker = list(color = fc[fl], size = 6,
-                      symbol = if (has_idx_q) q_symbols[q] else "circle",
+                      symbol = if (has_idx_q) q_symbols[(q - 1L) %% length(q_symbols) + 1L] else "circle",
                       line = list(color = "white", width = 0.5)),
         error_y = if (has_ci) list(
           type = "data", symmetric = FALSE,
@@ -150,8 +152,9 @@ make_resid_panel <- function(fl, stk, has_stk) {
   do.call(what = layout, args = c(list(p = p_resid), lay_resid))
 }
 
-# Registers toggle metadata for this widget in window._mvIdxToggle so the shared
-# button above all fleet plots can restyle every graph with one click.
+# Tags this widget with class "mv-idx-fleet" and stores toggle metadata directly
+# on the element so the shared button can find it via querySelectorAll.
+# Avoids the global-dict + getElementById pattern that breaks on the last element.
 attach_idx_toggle <- function(p, panel_results, offsets) {
   toggle_idxs <- unlist(mapply(function(res, off) {
     has_s <- !is.na(res$idx_single)
@@ -175,7 +178,7 @@ attach_idx_toggle <- function(p, panel_results, offsets) {
   ))
 
   htmlwidgets::onRender(p, sprintf(
-    'function(el,x){if(!window._mvIdxToggle)window._mvIdxToggle={};window._mvIdxToggle[el.id]=%s;}',
+    'function(el,x){el.classList.add("mv-idx-fleet");el._mvToggle=%s;}',
     meta_json
   ))
 }
@@ -233,11 +236,13 @@ if (has_idx_q) {
     </div>
     <script>
     function mvIdxLineToggle(mode) {
-      var t = window._mvIdxToggle || {};
-      for (var id in t) {
-        var gd = document.getElementById(id);
-        if (gd && gd.data) Plotly.restyle(gd, {visible: t[id][mode].visible}, t[id][mode].indices);
-      }
+      document.querySelectorAll(".mv-idx-fleet").forEach(function(gd) {
+        if (gd._mvToggle && gd._mvToggle[mode]) {
+          try {
+            Plotly.restyle(gd, {visible: gd._mvToggle[mode].visible}, gd._mvToggle[mode].indices);
+          } catch(e) { console.error("mv-idx toggle error:", gd.id, e); }
+        }
+      });
       document.getElementById("mv-idx-btn-s").className =
         mode === "single" ? "btn btn-xs btn-primary" : "btn btn-xs btn-default";
       document.getElementById("mv-idx-btn-q").className =

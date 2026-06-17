@@ -5,5 +5,5 @@
 .positai
 *.Rproj
 *.html
-test_*/
-fit_*/
+.DS_Store
+fits/
