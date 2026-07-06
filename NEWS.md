@@ -1,3 +1,90 @@
+# modelVis 0.1.7
+
+## SISCAH dashboard: population dynamics plots
+
+* **Natural mortality**: new `m_adult_ts` mv component carries the
+  age-2+ M time series with optional MCMC CI bounds, `Mbar` (temporal
+  mean), and `M0_p` (base M per area). `child_mortality.Rmd` Natural
+  Mortality tab now renders a salmon line + MCMC ribbon + grey-dashed
+  Mbar and salmon-dotted M0 reference lines -- matching the
+  `plotMt()` fitReport panel. Reference lines are plotted as traces
+  so they appear in the legend (`"Age-2+ M"`, `"95% CI"`,
+  `"Mbar"`, `"M0"`).
+
+* **Density-dependent M scatter**: `ddm_data` extraction extended
+  with `params` (M_b, m1, residual SD, M0 per area), `curve_ci`
+  (MCMC quantile ribbon around the fitted DDM curve), and point CI
+  merged into `obs`. `ddm_scatter` chunk rewritten to show: salmon
+  CI ribbon around the fitted curve; year-gradient coloured points
+  (red = oldest, blue = newest); vertical CI error bars; dashed
+  reference lines at M0 and depletion = 1; top-right annotation box
+  (M_b, m1, SD); colour legend entries for the first and last year.
+
+* **Stock-recruitment**: `sr_params` now stores full per-area
+  vectors (`reca`, `recb`, `h`, `B0`, `R0`) instead of scalars.
+  `sr_plot` chunk rewritten with a `.sr_panel()` helper: per-area
+  B-H curve, scatter coloured by area, B0/R0 reference lines, and
+  a steepness annotation box (`h = X.XXX`) in the top-right corner.
+  Multi-area models render as subplots.
+
+## SISCAH dashboard: fits-to-data and data summary
+
+* **Length comps yearly fits**: height is now computed per-fleet
+  (`max(490L, 122L * n_row + 90L)` px) and applied via both
+  `layout(height = h)` and `p$height <- h` so the htmlwidget
+  container actually resizes (previous approach of setting only
+  `layout(height=)` was ignored when `responsive = TRUE`). Switched
+  to `config(responsive = FALSE)` so plotly.js honours the explicit
+  pixel height.
+
+* **Data availability**: individual combined-index fleets (surface
+  survey, dive survey) are now suppressed from the fleet loop and
+  replaced with a single `"Spawn Survey"` row built from
+  `combI_pt`. This matches the fleet names visible elsewhere in the
+  dashboard.
+
+* **Selectivity**: spawn-survey fleets (combined-index gears with
+  `whichCombIdx_g == 1`) are excluded from the selectivity-at-age
+  table and plot.
+
+## Hover popups
+
+* **At-a-Glance**: CI ribbons on the SB panel, recruitment panel,
+  harvest-rate panel, and bio overlay panel now have
+  `hovertemplate` instead of `hoverinfo = "skip"`.
+* **Status distributions**: crosshair CI traces on B/Bmsy and
+  U/Umsy distributions now show hover tooltips.
+
+## Model information
+
+* **Density-dep M flag**: `meta$is_ddm` is exposed in the Model
+  Information table (`child_data_summary.Rmd`).
+
+## Child Rmd templates
+
+* `child_mortality.Rmd` is now included in `vis_fit.Rmd` (it was
+  missing entirely; the Mortality nav-menu page was never rendered).
+* `child_comp_corr.Rmd` and `child_osa.Rmd` added.
+
+# modelVis 0.1.6
+
+## Index and toggle fixes
+
+* Fixed fleet-index toggle so it works correctly for all fleets,
+  not just the first.
+* Growth transitions: per-quarter panel rows with scaled height;
+  hover shows true probability via the `text` field (not raw
+  array value).
+
+## Quarterly index line toggle
+
+* Quarterly observations can now be toggled on/off independently
+  of the annual trend line in the index-fits panel.
+
+## Index fit confidence intervals
+
+* Lognormal 95% CI error bars added to index fits plot.
+
 # modelVis 0.1.5
 
 ## Multi-stock column layout for Fits to Data

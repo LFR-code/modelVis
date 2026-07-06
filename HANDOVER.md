@@ -1,21 +1,20 @@
-# modelVis Handover
+# modelVis Developer Reference
 
-**From:** Sam Johnson
-**To:** Scarlett
-**Date:** 2026-05-25
-**Package version at handover:** 0.1.3 (`DESCRIPTION`)
+**Maintainer:** Scarlett Wang
+**Current version:** 0.1.7 (`DESCRIPTION`)
+**Original handover:** Sam Johnson → Scarlett Wang, 2026-05-25
 
-This document hands modelVis development over to Scarlett, whose
-first job is to wire up a **length-based assessment model**. It
-covers the architecture, the current state of the code, how to
-write an extractor (dispatcher) for a new model, and the
-length-specific work that remains.
+This document describes the architecture, current state, and
+conventions for active modelVis development. It was originally a
+handover document from Sam; it is now maintained as a living
+developer reference.
 
-For the canonical step-by-step extractor reference, see
+For the canonical step-by-step extractor guide, see
 `vignette("modelvis-extractor")` (source:
-`vignettes/modelvis-extractor.Rmd`). This handover orients you
-around it and adds the length-model details that the vignette
-does not yet cover.
+`vignettes/modelvis-extractor.Rmd`). This document adds context
+that the vignette does not cover: multi-area models, MCMC
+posteriors, density-dependent M, and the SISCAH reference
+implementation.
 
 ---
 
@@ -100,11 +99,9 @@ master template.
 
 - The `extract()` generic, `new_mv()` constructor, validation,
   print/summary.
-- `extract.ms3Blob()` -- full reference extractor for MS3
-  closed-loop simulation blobs (`R/extract_ms3.R`). This is the
-  most complete worked example of array-to-data.frame reshaping,
-  fleet-type handling, and conditional components. **Read it
-  first.**
+- `extract.ms3Blob()` -- reference extractor for MS3 closed-loop
+  simulation blobs (`R/extract_ms3.R`). Good example of
+  array-to-data.frame reshaping and fleet-type handling.
 - `mv_dashboard()` (assessment) and `mv_sim_dashboard()`
   (simulation) render end to end.
 - All `mv_plot_*` helpers and tidy helpers are exported and
@@ -113,30 +110,55 @@ master template.
 **Registered model types:**
 
 - `ms3Blob` -- built into this package (`extract_ms3.R`).
-- `sableOpMod` and `sisca` -- registered in **their own**
-  packages, not here. modelVis only carries fingerprints for
-  auto-detection in `.detect_model_type()`. The sableOpMod
-  reference implementation lives in the Sablefish project at
-  `.../R/extract_mv.R` (verify the current path before relying
-  on it -- this came from a 65-day-old note).
+- `siscah` -- registered in the SISCAH package
+  (`SISCAH/R/extract_mv.R`). This is the **primary active
+  extractor** and the most complete reference for multi-area,
+  multi-fleet, MCMC-posterior, and density-dependent-M models.
+  Read this before writing a new extractor.
+- `sableOpMod` and `sisca` -- registered in their own packages,
+  not here. modelVis carries only their auto-detection
+  fingerprints in `.detect_model_type()`.
 
-**Length support that already exists but is largely untested:**
+**SISCAH-specific mv components (not in other extractors):**
 
-The dashboard side already has hooks for length-based output,
-even though no extractor populates them yet. These are the slots
-your length-model extractor should target:
+| Component       | Description                                      |
+|-----------------|--------------------------------------------------|
+| `m_adult_ts`    | Age-2+ M time series; list with `series`, `Mbar`,|
+|                 | `M0_p`. CI from `posts$M_iapt` if MCMC present. |
+| `ddm_data`      | DDM scatter data: `obs` (depletion + M per year),|
+|                 | `curve`, `curve_ci`, `params` (M_b, m1, sd, M0). |
+| `meta$is_ddm`   | Logical; gates the Density-Dependent M tab.      |
+| `meta$mode`     | `"OM"` vs `"MP"` controls some conditional tabs.|
 
-| `mv` slot               | Rendered by               | Status |
-|-------------------------|---------------------------|--------|
-| `len_comp_fits`         | `child_len_comps.Rmd`     | hook   |
-| `len_comp_resids`       | `child_len_comps.Rmd`     | hook   |
-| `selectivity_at_length` | `child_selectivity.Rmd`   | hook   |
-| `length_at_age`         | `child_life_history.Rmd`  | hook   |
-| `age_length_key`        | `child_life_history.Rmd`  | hook   |
+**Length support (wired, exercised via SISCAH):**
 
-"hook" means the template chunk exists and is `eval`-gated on the
-slot being non-`NULL`, but it has not been exercised by a real
-extractor. Expect to debug these as you feed them real data.
+| `mv` slot               | Rendered by               | Status    |
+|-------------------------|---------------------------|-----------|
+| `len_comp_fits`         | `child_len_comps.Rmd`     | working   |
+| `len_comp_resids`       | `child_len_comps.Rmd`     | working   |
+| `selectivity_at_length` | `child_selectivity.Rmd`   | working   |
+| `length_at_age`         | `child_life_history.Rmd`  | working   |
+| `age_length_key`        | `child_life_history.Rmd`  | working   |
+
+**Combined-index (blended survey) convention:**
+
+SISCAH can blend a surface + dive spawn survey into a single
+combined index using `data$whichCombIdx_g` and `data$combI_pt`.
+The extractor skips those individual fleet rows in data
+availability, selectivity, and comp sections, and instead adds a
+synthetic `"Spawn Survey"` row built from `combI_pt`. If your
+model has a similar blended-index structure, follow the same
+pattern in your extractor.
+
+**Known open items (as of 2026-07-06):**
+
+- Yearly length-fit panel heights: the `p$height <- h` +
+  `config(responsive = FALSE)` fix is deployed but not yet
+  verified on a regenerated dashboard by the user.
+- Natural mortality and DDM scatter plots updated to match
+  fitReport; user verification pending.
+- Test suite has not been run since 0.1.3; fixtures may need
+  updating for new `new_mv()` components.
 
 ---
 
@@ -383,21 +405,25 @@ fixture.
 
 ## 8. Loose ends in the working tree
 
-At handover, `git status` shows uncommitted local items:
-
-- `M .Rbuildignore`
-- `?? .gitignore`
-- `?? test_extract.R` -- a scratch script, not part of the
-  package; decide whether to keep or delete.
-
-Clean these up or check with Sam before your first commit so the
-history starts tidy.
+- `render_fwTest15.R` -- scratch render script in the package
+  root; not part of the package, fine to delete once no longer
+  needed.
+- Test fixtures: the `testthat` suite uses `example_mv.rds` from
+  `inst/extdata`. It does not cover SISCAH-specific components
+  (`m_adult_ts`, `ddm_data`, combined-index data availability).
+  Adding a small synthetic SISCAH-like fixture would let the
+  suite catch regressions in those code paths.
 
 ---
 
-## 9. Questions
+## 9. Constructor contract
 
-Anything about the `mv` contract, the MS3 reference extractor, or
-the `ages`/`selectivity_surface` gaps in section 5.2 -- ask Sam
-before changing the constructor or validator, since the other
-model packages (sableOpMod, sisca) depend on that contract.
+`new_mv()` and `.validate_mv()` define the interface that all
+model packages depend on. The `ages`, `sex_names`, `fleet_names`,
+and `area_names` fields in `meta` must remain present and typed
+consistently -- `sableOpMod`, `sisca`, and `ms3Blob` extractors
+all rely on them. Before changing the constructor or validator,
+grep for `new_mv(` across all dependent packages and verify
+compatibility. The `m_adult_ts` and `ddm_data` components are
+SISCAH-specific and passed through `...` to `new_mv()`, so they
+do not affect the validated contract for other models.
