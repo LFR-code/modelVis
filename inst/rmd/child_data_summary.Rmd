@@ -140,7 +140,8 @@ info_df <- data.frame(
     "Sexes", "Fleets",
     "Commercial", "Survey",
     "Areas",
-    "Length comps", "Discards", "MCMC"
+    "Length comps", "Discards",
+    "Density-dep M", "MCMC"
   ),
   Value = c(
     meta$model_type,
@@ -154,6 +155,7 @@ info_df <- data.frame(
     paste(areas, collapse = ", "),
     ifelse(test = has_len, yes = "Yes", no = "No"),
     ifelse(test = has_disc, yes = "Yes", no = "No"),
+    ifelse(test = is_ddm, yes = "Yes", no = "No"),
     ifelse(test = has_mcmc, yes = "Yes", no = "No")
   ),
   stringsAsFactors = FALSE

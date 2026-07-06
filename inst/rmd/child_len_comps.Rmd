@@ -215,6 +215,12 @@ for (fl in len_fleets) {
       sub$year_q <- if (lc_has_q) paste0(sub$year, "-", sub$quarter) else
                       as.character(sub$year)
 
+      # Per-fleet height: 122px per panel row + 90px overhead (matches
+      # user-approved appearance of ~4 rows at 490px total).
+      n_yrq_fl <- length(unique(sub$year_q))
+      n_row_fl <- ceiling(n_yrq_fl / n_col_yr)
+      h_fl     <- max(490L, 122L * n_row_fl + 90L)
+
       p <- mv_plot_comp_grid(
         df             = sub,
         bin_col        = "length",
@@ -223,24 +229,22 @@ for (fl in len_fleets) {
         years_per_page = Inf,
         year_col       = "year_q"
       )
-      p <- layout(p = p, title = lbl, margin = list(t = 50))
+      # Set explicit pixel height and turn off responsive so layout height wins
+      p <- layout(p = p, title = lbl, margin = list(t = 50), height = h_fl)
+      p <- plotly::config(p, responsive = FALSE,
+                          displaylogo = FALSE,
+                          modeBarButtonsToRemove = c("select2d","lasso2d","autoScale2d"))
+      p$height <- h_fl
       plot_info[[length(plot_info) + 1L]] <- list(
         plot  = p,
         fleet = fl,
         stock = if (!is.null(stk)) stk else "",
-        sex   = sx
+        sex   = sx,
+        h     = h_fl
       )
     }
   }
 }
-
-n_yrq    <- if (lc_has_q) {
-  length(unique(paste0(mv$len_comp_fits$year, "-", mv$len_comp_fits$quarter)))
-} else {
-  length(unique(mv$len_comp_fits$year))
-}
-n_row_yr <- ceiling(n_yrq / n_col_yr)
-h_yr     <- max(200L, 100L * n_row_yr + 90L)
 
 plot_divs <- lapply(plot_info, function(info) {
   htmltools::div(
@@ -248,7 +252,7 @@ plot_divs <- lapply(plot_info, function(info) {
     `data-fleet`  = info$fleet,
     `data-stock`  = info$stock,
     `data-sex`    = info$sex,
-    style         = paste0("height:", h_yr, "px; margin-bottom:10px;"),
+    style         = paste0("height:", info$h, "px; margin-bottom:10px;"),
     info$plot
   )
 })

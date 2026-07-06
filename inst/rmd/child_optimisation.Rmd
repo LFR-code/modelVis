@@ -104,6 +104,69 @@ p <- do.call(
 modelVis::mv_config(p = p)
 ```
 
+### Observational Errors
+
+```{r obs_errors_table, eval=!is.null(mv$obs_errors)}
+oe <- mv$obs_errors
+rows <- list()
+# tau2Age: age-comp SD per area x fleet (sqrt of variance)
+if (!is.null(oe$tau2Age)) {
+  m <- oe$tau2Age
+  for (p in seq_len(nrow(m)))
+    for (g in seq_len(ncol(m))) {
+      fl  <- if (!is.null(oe$fleet_names) && g <= length(oe$fleet_names))
+               oe$fleet_names[g] else paste("Fleet", g)
+      ar  <- if (!is.null(oe$area_names)  && p <= length(oe$area_names))
+               oe$area_names[p]  else paste("Area",  p)
+      val <- m[p, g]
+      if (is.finite(val) && val > 0)
+        rows[[length(rows) + 1L]] <- data.frame(
+          Component = paste("Age SD", fl, ar),
+          Value     = round(sqrt(val), 4),
+          stringsAsFactors = FALSE
+        )
+    }
+}
+# tauComb: combined index SD per area x fleet
+if (!is.null(oe$tauComb)) {
+  m <- oe$tauComb
+  for (p in seq_len(nrow(m)))
+    for (g in seq_len(ncol(m))) {
+      fl  <- if (!is.null(oe$fleet_names) && g <= length(oe$fleet_names))
+               oe$fleet_names[g] else paste("Fleet", g)
+      ar  <- if (!is.null(oe$area_names)  && p <= length(oe$area_names))
+               oe$area_names[p]  else paste("Area",  p)
+      val <- m[p, g]
+      if (is.finite(val) && val > 0)
+        rows[[length(rows) + 1L]] <- data.frame(
+          Component = paste("Index SD", fl, ar),
+          Value     = round(sqrt(val), 4),
+          stringsAsFactors = FALSE
+        )
+    }
+}
+# Effective sigma_R and sigma_M
+if (!is.null(oe$effsigR) && is.finite(oe$effsigR))
+  rows[[length(rows) + 1L]] <- data.frame(
+    Component = "Effective sigma_R (rec devs)",
+    Value     = round(oe$effsigR, 4),
+    stringsAsFactors = FALSE
+  )
+if (!is.null(oe$effsigM) && is.finite(oe$effsigM))
+  rows[[length(rows) + 1L]] <- data.frame(
+    Component = "Effective sigma_M (M devs)",
+    Value     = round(oe$effsigM, 4),
+    stringsAsFactors = FALSE
+  )
+if (length(rows) > 0) {
+  knitr::kable(
+    x = do.call(rbind, rows),
+    caption = "Estimated observational error standard deviations",
+    row.names = FALSE
+  )
+}
+```
+
 ### Phase Table
 
 ```{r phase_table, eval=!is.null(mv$fit_diagnostics$fit_report)}

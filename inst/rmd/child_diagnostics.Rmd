@@ -9,25 +9,128 @@ Row {.tabset}
 
 ```{r mcmc_summary}
 diag <- mv$mcmc_diagnostics
-info_df <- data.frame(
-  Property = c(
-    "Number of iterations",
-    "Parameters sampled"
-  ),
-  Value = c(
-    if (!is.null(diag$n_iter))
-      as.character(diag$n_iter) else "Unknown",
-    if (!is.null(diag$parameters))
-      as.character(length(diag$parameters))
-    else "Unknown"
-  ),
-  stringsAsFactors = FALSE
+rows <- list(
+  data.frame(Property = "Iterations per chain",
+             Value = if (!is.null(diag$n_iter)) as.character(diag$n_iter) else "Unknown",
+             stringsAsFactors = FALSE),
+  data.frame(Property = "Chains",
+             Value = if (!is.null(diag$n_chains)) as.character(diag$n_chains) else "Unknown",
+             stringsAsFactors = FALSE),
+  data.frame(Property = "Divergent transitions",
+             Value = if (!is.null(diag$n_div) && !is.na(diag$n_div)) as.character(diag$n_div) else "Unknown",
+             stringsAsFactors = FALSE),
+  data.frame(Property = "Parameters sampled",
+             Value = if (!is.null(diag$parameters)) as.character(length(diag$parameters)) else "Unknown",
+             stringsAsFactors = FALSE)
 )
+if (!is.null(diag$rhat)) {
+  rh <- diag$rhat[is.finite(diag$rhat)]
+  rows <- c(rows, list(
+    data.frame(Property = "Max Rhat",    Value = sprintf("%.4f", max(rh, na.rm=TRUE)), stringsAsFactors=FALSE),
+    data.frame(Property = "Rhat > 1.05", Value = as.character(sum(rh > 1.05, na.rm=TRUE)), stringsAsFactors=FALSE)
+  ))
+}
+if (!is.null(diag$ess)) {
+  es <- diag$ess[is.finite(diag$ess)]
+  rows <- c(rows, list(
+    data.frame(Property = "Min ESS",    Value = sprintf("%.0f", min(es, na.rm=TRUE)), stringsAsFactors=FALSE),
+    data.frame(Property = "Median ESS", Value = sprintf("%.0f", stats::median(es, na.rm=TRUE)), stringsAsFactors=FALSE)
+  ))
+}
 knitr::kable(
-  x = info_df,
-  caption = "MCMC diagnostics summary",
+  x         = do.call(rbind, rows),
+  caption   = "MCMC convergence summary",
   row.names = FALSE
 )
+```
+
+### Rhat Distribution
+
+```{r mcmc_rhat, eval=!is.null(mv$mcmc_diagnostics$rhat)}
+rh <- mv$mcmc_diagnostics$rhat
+rh <- rh[is.finite(rh)]
+n_chains_diag <- if (!is.null(mv$mcmc_diagnostics$n_chains)) mv$mcmc_diagnostics$n_chains else 1L
+n_gt105 <- sum(rh > 1.05, na.rm = TRUE)
+n_gt101 <- sum(rh > 1.01, na.rm = TRUE)
+
+p <- plot_ly()
+p <- add_histogram(
+  p = p, x = rh,
+  marker = list(color = "rgba(31,119,180,0.6)",
+                line = list(color = "white", width = 0.5)),
+  name = "Rhat", showlegend = FALSE,
+  hovertemplate = "Rhat bin %{x:.3f}: %{y}<extra></extra>"
+)
+p <- add_trace(
+  p = p, type = "scatter", mode = "lines",
+  x = c(1.01, 1.01), y = c(0, length(rh) * 0.5),
+  line = list(color = "#ff7f0e", width = 1.5, dash = "dash"),
+  name = "1.01 threshold", showlegend = TRUE
+)
+p <- add_trace(
+  p = p, type = "scatter", mode = "lines",
+  x = c(1.05, 1.05), y = c(0, length(rh) * 0.5),
+  line = list(color = "#d62728", width = 1.5, dash = "dash"),
+  name = "1.05 threshold", showlegend = TRUE
+)
+lay <- modelVis::mv_layout()
+lay$xaxis$title  <- "Rhat (Gelman-Rubin)"
+lay$yaxis$title  <- "Count"
+lay$showlegend   <- TRUE
+lay$annotations  <- list(list(
+  x = 0.98, y = 0.96, xref = "paper", yref = "paper",
+  text = paste0(">1.01: ", n_gt101, "  >1.05: ", n_gt105),
+  showarrow = FALSE, xanchor = "right",
+  font = list(size = 11), bgcolor = "rgba(255,255,255,0.8)"
+))
+p <- do.call(layout, c(list(p = p), lay))
+modelVis::mv_config(p = p)
+```
+
+### ESS Distribution
+
+```{r mcmc_ess, eval=!is.null(mv$mcmc_diagnostics$ess)}
+es <- mv$mcmc_diagnostics$ess
+es <- es[is.finite(es)]
+n_chains_ess <- if (!is.null(mv$mcmc_diagnostics$n_chains)) mv$mcmc_diagnostics$n_chains else 1L
+thresh <- 100 * n_chains_ess
+n_low  <- sum(es < thresh, na.rm = TRUE)
+
+# Dotplot: 30 worst-ESS parameters
+top_n  <- min(30L, length(es))
+es_ord <- sort(es)[seq_len(top_n)]
+par_nm <- names(es_ord)
+if (is.null(par_nm)) par_nm <- paste0("par_", seq_along(es_ord))
+
+p <- plot_ly()
+p <- add_markers(
+  p = p,
+  x = es_ord,
+  y = factor(par_nm, levels = rev(par_nm)),
+  marker = list(color = "#1f77b4", size = 7,
+                line = list(color = "white", width = 0.5)),
+  showlegend = FALSE,
+  hovertemplate = "%{y}: ESS = %{x:.0f}<extra></extra>"
+)
+p <- add_trace(
+  p = p, type = "scatter", mode = "lines",
+  x = c(thresh, thresh), y = c(0.5, top_n + 0.5),
+  line = list(color = "#d62728", width = 1.5, dash = "dash"),
+  name = paste0("100×chains (", thresh, ")"), showlegend = TRUE
+)
+lay <- modelVis::mv_layout()
+lay$xaxis$title  <- "Effective sample size (ESS)"
+lay$yaxis$title  <- ""
+lay$showlegend   <- TRUE
+lay$height       <- max(300, top_n * 18)
+lay$annotations  <- list(list(
+  x = 0.98, y = 0.04, xref = "paper", yref = "paper",
+  text = paste0("ESS < ", thresh, ": ", n_low, " pars"),
+  showarrow = FALSE, xanchor = "right",
+  font = list(size = 11), bgcolor = "rgba(255,255,255,0.8)"
+))
+p <- do.call(layout, c(list(p = p), lay))
+modelVis::mv_config(p = p)
 ```
 
 ### Spawning Biomass Posterior

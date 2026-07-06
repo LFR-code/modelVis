@@ -68,6 +68,14 @@ extract.default <- function(fit, label = "", ...) {
       !is.null(fit$repOpt$G_llxpq)) {
     return("siscaL")
   }
+  # siscah: SISCAH herring model — check before sableOpMod (both have repOpt + data).
+  # mat_a (maturity-at-age) and sel_ag (selectivity-at-age) are SISCAH-specific.
+  if (!is.null(fit$repOpt) &&
+      !is.null(fit$repOpt$mat_a) &&
+      !is.null(fit$repOpt$sel_ag) &&
+      !is.null(fit$data)) {
+    return("siscah")
+  }
   # sableOpMod: has repOpt and data
   if (!is.null(fit$repOpt) && !is.null(fit$data)) {
     return("sableOpMod")

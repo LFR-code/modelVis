@@ -1,0 +1,152 @@
+
+OSA Residuals {data-navmenu="Diagnostics"}
+=====================================
+
+Row {.tabset}
+-------------------------------------
+
+### Summary Table
+
+```{r osa_summary}
+smry <- mv$osa_residuals$summary
+smry$mean_z     <- round(smry$mean_z,  3)
+smry$sd_z       <- round(smry$sd_z,    3)
+smry$pGt2       <- round(smry$pGt2,    3)
+smry$pGt3       <- round(smry$pGt3,    4)
+smry$ks_p       <- round(smry$ks_p,    4)
+smry$shapiro_p  <- round(smry$shapiro_p, 4)
+knitr::kable(
+  x         = smry,
+  caption   = paste0(
+    "OSA residual summary by fishery. ",
+    "Under a correctly specified model z ~ N(0,1); ",
+    "pGt2 and pGt3 should be ~0.046 and ~0.003."
+  ),
+  col.names = c("Fleet", "n", "Mean z", "SD z",
+                "|z|>2", "|z|>3", "KS p", "Shapiro p"),
+  row.names = FALSE
+)
+```
+
+### QQ Plots
+
+```{r osa_qq}
+osa   <- mv$osa_residuals$osa
+flts  <- unique(osa$fleet)
+qq_plots <- lapply(flts, function(fl) {
+  z_fl <- osa$z[osa$fleet == fl]
+  z_fl <- z_fl[is.finite(z_fl)]
+  if (length(z_fl) < 3L) return(plotly::plotly_empty())
+  n    <- length(z_fl)
+  q_th <- qnorm(ppoints(n))
+  q_ob <- sort(z_fl)
+  rng  <- range(c(q_th, q_ob), na.rm = TRUE)
+  p <- plot_ly()
+  p <- add_markers(
+    p = p, x = q_th, y = q_ob,
+    marker = list(color = "#1f77b4", size = 4,
+                  line = list(color = "white", width = 0.5)),
+    showlegend = FALSE,
+    hovertemplate = "Theoretical: %{x:.3f}<br>Observed: %{y:.3f}<extra></extra>"
+  )
+  p <- add_trace(
+    p = p, type = "scatter", mode = "lines",
+    x = rng, y = rng,
+    line = list(color = "#d62728", width = 1.5, dash = "dash"),
+    showlegend = FALSE, hoverinfo = "skip"
+  )
+  lay <- modelVis::mv_layout()
+  lay$xaxis$title <- "Theoretical N(0,1)"
+  lay$yaxis$title <- "OSA residual"
+  lay$annotations <- list(mv_top_label(label = fl))
+  do.call(layout, c(list(p = p), lay))
+})
+if (length(qq_plots) > 1L) {
+  n_col <- min(length(qq_plots), 3L)
+  n_row <- ceiling(length(qq_plots) / n_col)
+  p_out <- do.call(subplot, c(qq_plots, list(
+    nrows = n_row, shareX = TRUE, shareY = TRUE,
+    titleX = TRUE, titleY = TRUE, margin = 0.06
+  )))
+  modelVis::mv_config(p = layout(p = p_out, showlegend = FALSE))
+} else if (length(qq_plots) == 1L) {
+  modelVis::mv_config(p = qq_plots[[1L]])
+}
+```
+
+### Residual Bubbles
+
+```{r osa_bubble}
+pb  <- mv$osa_residuals$perBin
+pb  <- pb[is.finite(pb$z), , drop = FALSE]
+pb$residual <- pb$z
+flts <- unique(pb$fleet)
+bub_plots <- lapply(flts, function(fl) {
+  sub <- pb[pb$fleet == fl, , drop = FALSE]
+  if (nrow(sub) == 0L) return(plotly::plotly_empty())
+  mv_plot_bubble(
+    df    = sub,
+    x_col = "year",
+    y_col = "age",
+    xlab  = "Year",
+    ylab  = "Age",
+    title = fl
+  )
+})
+if (length(bub_plots) > 0L)
+  htmltools::tagList(bub_plots)
+```
+
+### Histograms
+
+```{r osa_hist}
+osa  <- mv$osa_residuals$osa
+flts <- unique(osa$fleet)
+z_seq <- seq(-4, 4, length.out = 100)
+norm_y <- dnorm(z_seq)
+hist_plots <- lapply(flts, function(fl) {
+  z_fl <- osa$z[osa$fleet == fl]
+  z_fl <- z_fl[is.finite(z_fl)]
+  if (length(z_fl) < 3L) return(plotly::plotly_empty())
+  p <- plot_ly()
+  p <- add_histogram(
+    p = p, x = z_fl,
+    histnorm = "probability density",
+    marker = list(color = "rgba(31,119,180,0.5)",
+                  line = list(color = "white", width = 0.5)),
+    name = "Observed", showlegend = FALSE,
+    hovertemplate = "%{x:.2f}: %{y:.4f}<extra></extra>"
+  )
+  p <- add_trace(
+    p = p, type = "scatter", mode = "lines",
+    x = z_seq, y = norm_y,
+    line = list(color = "#d62728", width = 1.5),
+    name = "N(0,1)", showlegend = FALSE,
+    hoverinfo = "skip"
+  )
+  pct_gt2 <- round(100 * mean(abs(z_fl) > 2, na.rm = TRUE), 1)
+  lay <- modelVis::mv_layout()
+  lay$xaxis$title <- "OSA residual"
+  lay$yaxis$title <- "Density"
+  lay$annotations <- list(
+    mv_top_label(label = fl),
+    list(x = 0.98, y = 0.96, xref = "paper", yref = "paper",
+         text = paste0("|z| > 2: ", pct_gt2, "%"),
+         showarrow = FALSE, xanchor = "right",
+         font = list(size = 10),
+         bgcolor = "rgba(255,255,255,0.8)")
+  )
+  do.call(layout, c(list(p = p), lay))
+})
+if (length(hist_plots) > 1L) {
+  n_col <- min(length(hist_plots), 3L)
+  n_row <- ceiling(length(hist_plots) / n_col)
+  p_out <- do.call(subplot, c(hist_plots, list(
+    nrows = n_row, shareX = TRUE, shareY = FALSE,
+    titleX = TRUE, titleY = TRUE, margin = 0.06
+  )))
+  modelVis::mv_config(p = layout(p = p_out, showlegend = FALSE))
+} else if (length(hist_plots) == 1L) {
+  modelVis::mv_config(p = hist_plots[[1L]])
+}
+```

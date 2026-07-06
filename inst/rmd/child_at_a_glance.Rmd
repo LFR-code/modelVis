@@ -33,8 +33,10 @@ if (has_refpts && !is.null(mv$ref_points$lUmsy))
   p   <- plot_ly()
   if ("lwr" %in% names(sub) && any(!is.na(sub$lwr)))
     p <- add_ribbons(p=p, x=sub$year, ymin=sub$lwr, ymax=sub$upr,
-      line=list(width=0), fillcolor="rgba(31,119,180,0.2)",
-      showlegend=FALSE, hoverinfo="skip")
+      line=list(width=0.5, color="rgba(31,119,180,0.3)"),
+      fillcolor="rgba(31,119,180,0.2)", showlegend=FALSE,
+      name=paste0(lbl, " 95% CI"),
+      hovertemplate=paste0(lbl, " 95% CI %{x}: %{y:.3g}<extra></extra>"))
   p <- add_lines(p=p, x=sub$year, y=sub$est,
     line=list(color=col, width=2), name=lbl, showlegend=is.null(stk),
     hovertemplate=paste0(lbl, " %{x}: %{y:.3g}<extra></extra>"))
@@ -87,8 +89,10 @@ if (has_refpts && !is.null(mv$ref_points$lUmsy))
   p   <- plot_ly()
   if ("lwr" %in% names(sub) && any(!is.na(sub$lwr)))
     p <- add_ribbons(p=p, x=sub$year, ymin=sub$lwr, ymax=sub$upr,
-      line=list(width=0), fillcolor="rgba(44,160,44,0.2)",
-      showlegend=FALSE, hoverinfo="skip")
+      line=list(width=0.5, color="rgba(44,160,44,0.3)"),
+      fillcolor="rgba(44,160,44,0.2)", showlegend=FALSE,
+      name=paste0(lbl, " 95% CI"),
+      hovertemplate=paste0(lbl, " 95% CI %{x}: %{y:.3g}<extra></extra>"))
   if (nrow(sub) > 0)
     p <- add_lines(p=p, x=sub$year, y=sub$est,
       line=list(color=col, width=2), name=lbl, showlegend=FALSE,
@@ -131,8 +135,10 @@ if (has_refpts && !is.null(mv$ref_points$lUmsy))
       if (nrow(hr_f)==0) next
       if ("lwr" %in% names(hr_f) && any(!is.na(hr_f$lwr)))
         p <- add_ribbons(p=p, x=hr_f$year, ymin=hr_f$lwr, ymax=hr_f$upr,
-          line=list(width=0), fillcolor="rgba(31,119,180,0.2)",
-          showlegend=FALSE, hoverinfo="skip")
+          line=list(width=0.5, color="rgba(31,119,180,0.3)"),
+          fillcolor="rgba(31,119,180,0.2)", showlegend=FALSE,
+          name=paste0(fl, " 95% CI"),
+          hovertemplate=paste0(fl, " 95% CI %{x}: %{y:.4f}<extra></extra>"))
       hr_c <- stock_pal[((fi - 1L) %% length(stock_pal)) + 1L]
       p <- add_lines(p=p, x=hr_f$year, y=hr_f$est,
         line=list(color=hr_c, width=2),
@@ -202,8 +208,11 @@ bio_pal  <- c("#d62728", "#1f77b4", "#ff7f0e", "#2ca02c", "#9467bd")
   sub_sb <- sub_sb[order(sub_sb$year), , drop = FALSE]
   if ("lwr" %in% names(sub_sb) && any(!is.na(sub_sb$lwr)))
     p <- add_ribbons(p = p, x = sub_sb$year, ymin = sub_sb$lwr, ymax = sub_sb$upr,
-      fillcolor = "rgba(214,39,40,0.15)", line = list(width = 0),
-      legendgroup = "Spawning", showlegend = FALSE, hoverinfo = "skip")
+      fillcolor = "rgba(214,39,40,0.15)",
+      line = list(width = 0.5, color = "rgba(214,39,40,0.3)"),
+      legendgroup = "Spawning", showlegend = FALSE,
+      name = "Spawning 95% CI",
+      hovertemplate = "Spawning 95% CI %{x}: %{y:.3g}<extra></extra>")
   p <- add_lines(p = p, x = sub_sb$year, y = sub_sb$est,
     line = list(color = "#d62728", width = 2), name = "Spawning",
     legendgroup = "Spawning", showlegend = (!has_stk || si == 1L),
@@ -268,4 +277,71 @@ if (!is.null(bio_stks)) {
   p_out <- layout(p = p_out, showlegend = TRUE)
   modelVis::mv_config(p = p_out)
 }
+```
+
+### Harvest Control Rule
+
+```{r hcr_plot, eval=!is.null(mv$hcr)}
+hcr <- mv$hcr
+p   <- plot_ly()
+
+# HCR ramp curve
+p <- add_trace(
+  p = p, type = "scatter", mode = "lines",
+  x = hcr$Bseq, y = hcr$Useq,
+  line = list(color = "#333333", width = 2),
+  name = "HCR", showlegend = FALSE,
+  hovertemplate = "B: %{x:.3g}<br>U: %{y:.4f}<extra>HCR</extra>"
+)
+
+# LCP / UCP reference lines
+lay <- modelVis::mv_layout()
+lay$shapes <- list(
+  list(type = "line", x0 = hcr$LCP, x1 = hcr$LCP,
+       y0 = 0, y1 = 1, yref = "paper",
+       line = list(color = "#d62728", width = 1.5, dash = "dash")),
+  list(type = "line", x0 = hcr$UCP, x1 = hcr$UCP,
+       y0 = 0, y1 = 1, yref = "paper",
+       line = list(color = "#ff7f0e", width = 1.5, dash = "dash")),
+  list(type = "line", x0 = hcr$B0, x1 = hcr$B0,
+       y0 = 0, y1 = 1, yref = "paper",
+       line = list(color = "#999999", width = 1, dash = "dot"))
+)
+
+# Current-year estimate
+p <- add_markers(
+  p = p,
+  x = hcr$predB, y = hcr$targU,
+  marker = list(color = "#d62728", size = 12, symbol = "circle",
+                line = list(color = "white", width = 1.5)),
+  name = as.character(hcr$year),
+  hovertemplate = paste0(
+    "Year: ", hcr$year,
+    "<br>B̂: %{x:.3g}<br>U: %{y:.4f}",
+    "<br>TAC: ", round(hcr$tac * 1000), " t",
+    "<extra>", hcr$year, "</extra>"
+  )
+)
+
+lay$xaxis$title <- "Spawning biomass"
+lay$yaxis$title <- "Harvest rate"
+lay$xaxis$rangemode <- "tozero"
+lay$yaxis$rangemode <- "tozero"
+lay$showlegend <- TRUE
+lay$annotations <- c(lay$annotations, list(
+  list(
+    x = hcr$predB, y = hcr$targU,
+    xref = "x", yref = "y",
+    text = paste0(
+      " B̂=", round(hcr$predB * 1000), "t",
+      "  U=", round(hcr$targU, 3),
+      "  TAC=", round(hcr$tac * 1000), "t"
+    ),
+    showarrow = FALSE, xanchor = "left",
+    font = list(size = 12, color = "#d62728"),
+    bgcolor = "rgba(255,255,255,0.8)"
+  )
+))
+p <- do.call(what = layout, args = c(list(p = p), lay))
+modelVis::mv_config(p = p)
 ```

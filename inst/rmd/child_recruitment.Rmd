@@ -103,75 +103,83 @@ if (!is.null(rec_stks)) {
 ### Stock-Recruitment
 
 ```{r sr_plot, eval=!is.null(mv$stock_recruit)}
-sr <- mv$stock_recruit
-p <- plot_ly()
+sr          <- mv$stock_recruit
+sr_has_area <- "area" %in% names(sr) && length(unique(sr$area)) > 1L
+sr_areas    <- if (sr_has_area) unique(sr$area) else list(NULL)
+area_pal    <- c("#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd")
+prms        <- mv$sr_params
 
-# B-H curve overlay if params available
-if (has_sr) {
-  ssb_range <- seq(
-    from = 0,
-    to = max(sr$ssb, na.rm = TRUE) * 1.1,
-    length.out = 200
-  )
-  bh_r <- mv$sr_params$reca * ssb_range /
-    (1 + mv$sr_params$recb * ssb_range)
-  p <- add_lines(
-    p = p,
-    x = ssb_range, y = bh_r,
-    line = list(color = "#cccccc", width = 2),
-    name = "B-H curve", showlegend = FALSE,
-    hoverinfo = "skip"
-  )
+.sr_panel <- function(ar, ai) {
+  sub  <- if (!is.null(ar)) sr[sr$area == ar, , drop = FALSE] else sr
+  reca <- if (has_sr && !is.null(prms$reca)) prms$reca[min(ai, length(prms$reca))] else NULL
+  recb <- if (has_sr && !is.null(prms$recb)) prms$recb[min(ai, length(prms$recb))] else NULL
+  B0   <- if (!is.null(prms$B0)) prms$B0[min(ai, length(prms$B0))] else NULL
+  R0   <- if (!is.null(prms$R0)) prms$R0[min(ai, length(prms$R0))] else NULL
+  col  <- area_pal[((ai - 1L) %% length(area_pal)) + 1L]
+
+  p <- plot_ly()
+
+  # B-H curve
+  if (!is.null(reca) && !is.null(recb) && !is.na(reca) && !is.na(recb)) {
+    ssb_seq <- seq(0, max(sub$ssb, na.rm = TRUE) * 1.1, length.out = 200)
+    bh_r    <- reca * ssb_seq / (1 + recb * ssb_seq)
+    p <- add_lines(p = p, x = ssb_seq, y = bh_r,
+      line = list(color = "#aaaaaa", width = 2),
+      name = "B-H curve", showlegend = FALSE, hoverinfo = "skip")
+  }
+
+  # Scatter coloured by this area's colour, text = year
+  hover_pfx <- if (!is.null(ar)) paste0(ar, "<br>") else ""
+  p <- add_markers(p = p,
+    x = sub$ssb, y = sub$recruitment,
+    marker = list(color = col, size = 6,
+                  line = list(color = "white", width = 0.5)),
+    text = sub$year,
+    hovertemplate = paste0(hover_pfx,
+      "Year: %{text}<br>SSB: %{x:.3g}<br>R: %{y:.3g}<extra></extra>"),
+    showlegend = FALSE)
+
+  # B0/R0 reference lines
+  shapes <- list()
+  if (!is.null(B0) && !is.na(B0))
+    shapes <- c(shapes, list(list(type = "line",
+      x0 = B0, x1 = B0, y0 = 0, y1 = 1, yref = "paper",
+      line = list(color = "#99999966", width = 1, dash = "dash"))))
+  if (!is.null(R0) && !is.na(R0))
+    shapes <- c(shapes, list(list(type = "line",
+      x0 = 0, x1 = 1, xref = "paper", y0 = R0, y1 = R0,
+      line = list(color = "#99999966", width = 1, dash = "dash"))))
+
+  # Steepness annotation
+  h_val <- if (has_sr && !is.null(prms$h)) prms$h[min(ai, length(prms$h))] else NULL
+  h_ann <- if (!is.null(h_val) && !is.na(h_val))
+    list(list(x = 0.97, y = 0.97, xref = "paper", yref = "paper",
+              text = paste0("h = ", round(h_val, 3)),
+              showarrow = FALSE, xanchor = "right", yanchor = "top",
+              font = list(size = 12),
+              bgcolor = "rgba(255,255,255,0.8)",
+              bordercolor = "#cccccc", borderwidth = 1))
+  else list()
+
+  lay <- modelVis::mv_layout()
+  lay$xaxis$title <- "Spawning biomass"
+  lay$yaxis$title <- "Recruitment"
+  lay$shapes      <- shapes
+  area_anns <- if (!is.null(ar)) list(mv_top_label(label = ar)) else list()
+  lay$annotations <- c(area_anns, h_ann)
+  do.call(layout, c(list(p = p), lay))
 }
 
-# Observed points coloured by year
-p <- add_markers(
-  p = p,
-  x = sr$ssb, y = sr$recruitment,
-  color = ~sr$year,
-  colors = c("#1f77b4", "#d62728"),
-  marker = list(
-    size = 6,
-    line = list(color = "white", width = 0.5)
-  ),
-  text = ~sr$year,
-  hovertemplate = paste0(
-    "Year: %{text}<br>SSB: %{x:.3g}<br>",
-    "R: %{y:.3g}<extra></extra>"
-  ),
-  showlegend = FALSE
-)
-
-# B0/R0 reference lines
-sr_shapes <- list()
-if (!is.null(mv$sr_params$B0)) {
-  sr_shapes <- c(sr_shapes, list(list(
-    type = "line",
-    x0 = mv$sr_params$B0, x1 = mv$sr_params$B0,
-    y0 = 0, y1 = 1, yref = "paper",
-    line = list(
-      color = "#99999966", width = 1, dash = "dash"
-    )
+if (sr_has_area) {
+  pans  <- lapply(seq_along(sr_areas), function(i) .sr_panel(sr_areas[[i]], i))
+  p_out <- do.call(subplot, c(pans, list(
+    nrows = 1L, shareX = FALSE, shareY = FALSE,
+    titleX = TRUE, titleY = TRUE, margin = 0.06
   )))
+  p_out <- layout(p = p_out, title = "Stock-Recruitment")
+} else {
+  p_out <- .sr_panel(NULL, 1L)
+  p_out <- layout(p = p_out, title = "Stock-Recruitment")
 }
-if (!is.null(mv$sr_params$R0)) {
-  sr_shapes <- c(sr_shapes, list(list(
-    type = "line",
-    x0 = 0, x1 = 1, xref = "paper",
-    y0 = mv$sr_params$R0, y1 = mv$sr_params$R0,
-    line = list(
-      color = "#99999966", width = 1, dash = "dash"
-    )
-  )))
-}
-
-lay <- modelVis::mv_layout()
-lay$xaxis$title <- "Spawning biomass"
-lay$yaxis$title <- "Recruitment"
-lay$title <- "Stock-Recruitment"
-lay$shapes <- sr_shapes
-p <- do.call(
-  what = layout, args = c(list(p = p), lay)
-)
-modelVis::mv_config(p = p)
+modelVis::mv_config(p = p_out)
 ```

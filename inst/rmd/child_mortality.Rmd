@@ -52,21 +52,209 @@ if (has_fm_stock) {
 
 ### Natural Mortality
 
-```{r nm_display, eval=!is.null(mv$natural_mortality)}
-nm <- mv$natural_mortality
-if (is.data.frame(nm) && "sex" %in% names(nm) &&
-    !"year" %in% names(nm)) {
-  knitr::kable(
-    x = nm,
-    caption = "Natural mortality rate",
-    digits = 4
-  )
-} else if (is.data.frame(nm) && "year" %in% names(nm)) {
-  mv_plot_surface(
-    df    = nm,
-    ylab  = "Age",
-    xlab  = "Year",
-    title = "Natural Mortality at Age"
-  )
+```{r nm_display, eval=!is.null(mv$m_adult_ts)}
+mts      <- mv$m_adult_ts
+ser      <- mts$series
+Mbar     <- mts$Mbar
+M0_p     <- mts$M0_p
+has_ci   <- "lwr" %in% names(ser) && any(!is.na(ser$lwr))
+nm_areas <- if ("area" %in% names(ser) && length(unique(ser$area)) > 1L)
+              unique(ser$area) else NULL
+col_line <- "#e07070"
+col_fill <- "rgba(224,112,112,0.3)"
+
+.nm_panel <- function(ar, ai, show_leg) {
+  sub <- if (!is.null(ar)) ser[ser$area == ar, , drop = FALSE] else ser
+  sub <- sub[order(sub$year), , drop = FALSE]
+  p   <- plot_ly()
+
+  # MCMC CI ribbon
+  if (has_ci)
+    p <- add_ribbons(p = p, x = sub$year, ymin = sub$lwr, ymax = sub$upr,
+      fillcolor = col_fill,
+      line = list(width = 0.5, color = col_fill),
+      showlegend = show_leg, name = "95% CI",
+      hovertemplate = "95% CI %{x}: %{y:.4f}<extra></extra>")
+
+  # Mean/median line
+  p <- add_lines(p = p, x = sub$year, y = sub$est,
+    line = list(color = col_line, width = 2.5),
+    name = "Age-2+ M", showlegend = show_leg,
+    hovertemplate = "Age-2+ M %{x}: %{y:.4f}<extra></extra>")
+
+  # Mbar reference (mean M over time series) — as a trace so it appears in legend
+  if (!is.null(Mbar) && !is.na(Mbar))
+    p <- add_lines(p = p,
+      x = c(min(sub$year), max(sub$year)), y = c(Mbar, Mbar),
+      line = list(color = "grey50", width = 2, dash = "dash"),
+      name = "Mbar", showlegend = show_leg,
+      hovertemplate = paste0("Mbar: ", round(Mbar, 4), "<extra>Mbar</extra>"))
+
+  # M0 reference (base M for this area) — as a trace so it appears in legend
+  M0 <- if (!is.null(M0_p)) M0_p[min(ai, length(M0_p))] else NULL
+  if (!is.null(M0) && !is.na(M0))
+    p <- add_lines(p = p,
+      x = c(min(sub$year), max(sub$year)), y = c(M0, M0),
+      line = list(color = col_line, width = 2, dash = "dot"),
+      name = "M0", showlegend = show_leg,
+      hovertemplate = paste0("M0: ", round(M0, 4), "<extra>M0</extra>"))
+
+  anns <- if (!is.null(ar)) list(mv_top_label(label = ar)) else list()
+
+  lay <- modelVis::mv_layout()
+  lay$xaxis$title  <- "Year"
+  lay$yaxis$title  <- "Natural mortality (/yr)"
+  lay$annotations  <- anns
+  lay$showlegend   <- show_leg
+  do.call(layout, c(list(p = p), lay))
 }
+
+if (!is.null(nm_areas)) {
+  pans  <- lapply(seq_along(nm_areas),
+                  function(i) .nm_panel(nm_areas[i], i, i == 1L))
+  p_out <- do.call(subplot, c(pans, list(
+    nrows = 1L, shareX = TRUE, shareY = TRUE,
+    titleX = FALSE, titleY = TRUE, margin = 0.04)))
+  p_out <- layout(p = p_out, xaxis = list(title = "Year"),
+                  title = "Natural Mortality (Age-2+)", showlegend = TRUE)
+} else {
+  p_out <- .nm_panel(NULL, 1L, TRUE)
+  p_out <- layout(p = p_out, title = "Natural Mortality (Age-2+)")
+}
+modelVis::mv_config(p = p_out)
+```
+
+### Density-Dependent M
+
+```{r ddm_scatter, eval=isTRUE(meta$is_ddm) && !is.null(mv$ddm_data)}
+dd        <- mv$ddm_data
+obs       <- dd$obs
+crv       <- dd$curve
+crv_ci    <- dd$curve_ci
+prms      <- dd$params
+areas_ddm <- if (!is.null(prms)) unique(prms$area) else unique(obs$area)
+
+col_curve <- "salmon"
+col_fill  <- "rgba(250,128,114,0.35)"
+
+.ddm_panel <- function(ar, ai, show_leg) {
+  sub_obs  <- obs[obs$area == ar, , drop = FALSE]
+  sub_obs  <- sub_obs[order(sub_obs$year), , drop = FALSE]
+  sub_crv  <- if (!is.null(crv)) crv[crv$area == ar, , drop = FALSE] else NULL
+  sub_ci   <- if (!is.null(crv_ci)) crv_ci[crv_ci$area == ar, , drop = FALSE] else NULL
+  prm      <- if (!is.null(prms)) prms[prms$area == ar, , drop = FALSE] else NULL
+
+  p <- plot_ly()
+
+  # CI ribbon around fitted curve
+  if (!is.null(sub_ci) && nrow(sub_ci) > 0)
+    p <- add_ribbons(p = p, x = sub_ci$depletion,
+      ymin = sub_ci$lwr, ymax = sub_ci$upr,
+      fillcolor = col_fill, line = list(width = 0),
+      showlegend = FALSE, hoverinfo = "skip")
+
+  # Fitted DDM curve
+  if (!is.null(sub_crv) && nrow(sub_crv) > 0)
+    p <- add_lines(p = p, x = sub_crv$depletion, y = sub_crv$M_fit,
+      line = list(color = col_curve, width = 2),
+      name = "Expected depM curve", showlegend = show_leg,
+      hovertemplate = "Depletion: %{x:.3f}<br>M̂: %{y:.4f}<extra>Fitted</extra>")
+
+  # Year-gradient colored markers + optional CI segments
+  nYr     <- nrow(sub_obs)
+  yr_rng  <- range(sub_obs$year, na.rm = TRUE)
+  yr_norm <- (sub_obs$year - yr_rng[1]) / max(yr_rng[2] - yr_rng[1], 1)
+  # Red (#d62728) → blue (#1f77b4) gradient
+  r_val <- round(214 + (31  - 214) * yr_norm)
+  g_val <- round(39  + (119 - 39)  * yr_norm)
+  b_val <- round(40  + (180 - 40)  * yr_norm)
+  pt_cols <- paste0("rgb(", r_val, ",", g_val, ",", b_val, ")")
+
+  # Error bars if CI available
+  has_pt_ci <- "lwr" %in% names(sub_obs) && any(!is.na(sub_obs$lwr))
+  if (has_pt_ci) {
+    for (i in seq_len(nYr)) {
+      p <- add_segments(p = p,
+        x = sub_obs$depletion[i], xend = sub_obs$depletion[i],
+        y = sub_obs$lwr[i],       yend = sub_obs$upr[i],
+        line = list(color = pt_cols[i], width = 1),
+        showlegend = FALSE, hoverinfo = "skip")
+    }
+  }
+
+  # Scatter points coloured by year, labelled "Estimated annual M" in legend
+  p <- add_markers(p = p,
+    x = sub_obs$depletion, y = sub_obs$M_obs,
+    marker = list(color = pt_cols, size = 7,
+                  line = list(color = "rgba(0,0,0,0.5)", width = 0.8)),
+    text = paste0(sub_obs$year, "<br>D: ", round(sub_obs$depletion, 3),
+                  "<br>M: ", round(sub_obs$M_obs, 4)),
+    hovertemplate = "%{text}<extra></extra>",
+    name = "Estimated annual M", showlegend = show_leg)
+
+  # Dashed reference lines (M0 horizontal, D=1 vertical)
+  M0_val <- if (!is.null(prm) && nrow(prm) > 0) prm$M0[1] else NULL
+  shapes <- list()
+  if (!is.null(M0_val) && !is.na(M0_val)) {
+    x_max <- max(c(sub_obs$depletion, 1.05), na.rm = TRUE) * 1.05
+    shapes <- list(
+      list(type = "line", x0 = 0,   x1 = 1,     y0 = M0_val, y1 = M0_val,
+           line = list(color = "grey40", width = 1.2, dash = "dash")),
+      list(type = "line", x0 = 1,   x1 = 1,     y0 = 0,      y1 = M0_val,
+           line = list(color = "grey40", width = 1.2, dash = "dash"))
+    )
+  }
+
+  # Year range colour indicators (first and last year as coloured markers in legend)
+  yr1_col <- paste0("rgb(214,39,40)")
+  yr2_col <- paste0("rgb(31,119,180)")
+  p <- add_markers(p = p, x = NA_real_, y = NA_real_,
+    marker = list(color = yr1_col, size = 8, symbol = "circle",
+                  line = list(color = yr1_col, width = 0)),
+    name = as.character(yr_rng[1]), showlegend = show_leg)
+  p <- add_markers(p = p, x = NA_real_, y = NA_real_,
+    marker = list(color = yr2_col, size = 8, symbol = "circle",
+                  line = list(color = yr2_col, width = 0)),
+    name = as.character(yr_rng[2]), showlegend = show_leg)
+
+  # Parameter annotation (M_b, m1, SD) in top-right
+  param_anns <- list()
+  if (!is.null(prm) && nrow(prm) > 0) {
+    ann_txt <- paste0(
+      "M<sub>b</sub> = ", round(prm$M_b[1], 2), "<br>",
+      "m1 = ",            round(prm$m1[1],  2), "<br>",
+      "SD = ",            round(prm$sd[1],  3))
+    param_anns <- list(list(
+      x = 0.97, y = 0.97, xref = "paper", yref = "paper",
+      text = ann_txt, showarrow = FALSE,
+      xanchor = "right", yanchor = "top",
+      align = "right",
+      font = list(size = 12),
+      bgcolor = "rgba(255,255,255,0.8)",
+      bordercolor = "#cccccc", borderwidth = 1))
+  }
+
+  area_ann <- if (length(areas_ddm) > 1L) list(mv_top_label(label = ar)) else list()
+
+  lay <- modelVis::mv_layout()
+  lay$xaxis$title <- "Age 2+ biomass depletion"
+  lay$yaxis$title <- "Age 2+ mortality (/yr)"
+  lay$shapes      <- shapes
+  lay$annotations <- c(area_ann, param_anns)
+  lay$showlegend  <- show_leg
+  do.call(layout, c(list(p = p), lay))
+}
+
+if (length(areas_ddm) > 1L) {
+  pans  <- lapply(seq_along(areas_ddm), function(i) .ddm_panel(areas_ddm[i], i, i == 1L))
+  p_out <- do.call(subplot, c(pans, list(
+    nrows = 1L, shareX = FALSE, shareY = FALSE,
+    titleX = TRUE, titleY = TRUE, margin = 0.06)))
+  p_out <- layout(p = p_out, title = "Density-Dependent Natural Mortality",
+                  showlegend = TRUE)
+} else {
+  p_out <- .ddm_panel(areas_ddm[1L], 1L, TRUE)
+  p_out <- layout(p = p_out, title = "Density-Dependent Natural Mortality")
+}
+modelVis::mv_config(p = p_out)
 ```

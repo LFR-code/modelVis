@@ -16,6 +16,7 @@ if (nrow(catch_fl) > 0) {
   catch_stocks    <- if (has_catch_stock) unique(catch_fl$stock) else NULL
   fc              <- mv_fleet_colours(fleet_names = comm_fleets)
   has_catch_q     <- "quarter" %in% names(catch_fl) && length(unique(catch_fl$quarter)) > 1L
+  sok_fls         <- if (!is.null(meta$sok_fleet_names)) meta$sok_fleet_names else character(0)
   c_q_symbols     <- c("circle-open", "square-open", "diamond-open", "triangle-up-open",
                        "cross-open", "x-open", "pentagon-open", "hexagon-open",
                        "star-open", "hourglass-open", "bowtie-open", "asterisk-open")
@@ -77,7 +78,7 @@ if (nrow(catch_fl) > 0) {
 
     lay <- modelVis::mv_layout()
     lay$annotations <- list(mv_top_label(label = panel_lbl))
-    lay$yaxis$title <- "Landings"
+    lay$yaxis$title <- if (fl %in% sok_fls) "SOK catch (fish-equiv t)" else "Landings"
     if (has_catch_q) {
       lay$xaxis$tickmode <- "array"
       lay$xaxis$tickvals <- as.list(c_yr_ticks)
@@ -227,7 +228,7 @@ if (nrow(disc_fl) > 0) {
 
 ### Observation Error
 
-```{r obs_error_table, eval=!is.null(mv$obs_error)}
+```{r obs_error_table, eval=!is.null(mv$obs_error) && is.data.frame(mv$obs_error) && "tau" %in% names(mv$obs_error)}
 oe <- mv$obs_error
 oe$tau <- round(x = oe$tau, digits = 4)
 knitr::kable(

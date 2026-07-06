@@ -51,6 +51,8 @@ has_refpts <- !is.null(mv$ref_points)
 has_refcrv <- !is.null(mv$ref_curves)
 has_sr     <- !is.null(mv$sr_params) &&
               !is.null(mv$sr_params$reca)
+is_ddm     <- isTRUE(meta$is_ddm)
+is_mp      <- identical(meta$mode, "MP")
 ```
 
 ```{r child_data, child=system.file("rmd", "child_data_summary.Rmd", package = "modelVis")}
@@ -74,6 +76,9 @@ has_sr     <- !is.null(mv$sr_params) &&
 ```{r child_recruitment, child=system.file("rmd", "child_recruitment.Rmd", package = "modelVis")}
 ```
 
+```{r child_mortality, child=system.file("rmd", "child_mortality.Rmd", package = "modelVis")}
+```
+
 ```{r child_sel, child=system.file("rmd", "child_selectivity.Rmd", package = "modelVis"), eval=!is.null(mv$selectivity_at_age) || !is.null(mv$selectivity_at_length) || !is.null(mv$size_transition)}
 ```
 
@@ -89,7 +94,13 @@ has_sr     <- !is.null(mv$sr_params) &&
 ```{r child_optim, child=system.file("rmd", "child_optimisation.Rmd", package = "modelVis"), eval=!is.null(mv$fit_diagnostics)}
 ```
 
+```{r child_osa, child=system.file("rmd", "child_osa.Rmd", package = "modelVis"), eval=!is.null(mv$osa_residuals)}
+```
+
 ```{r child_diag, child=system.file("rmd", "child_diagnostics.Rmd", package = "modelVis"), eval=has_mcmc}
+```
+
+```{r child_comp_corr, child=system.file("rmd", "child_comp_corr.Rmd", package = "modelVis"), eval=!is.null(mv$comp_corr) && length(mv$comp_corr) > 0}
 ```
 
 ```{r child_comp, child=system.file("rmd", "child_comparison.Rmd", package = "modelVis"), eval=has_comp}
