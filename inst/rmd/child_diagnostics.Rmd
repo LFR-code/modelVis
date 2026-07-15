@@ -9,32 +9,52 @@ Row {.tabset}
 
 ```{r mcmc_summary}
 diag <- mv$mcmc_diagnostics
+chr_or_unk <- function(x)
+  if (!is.null(x)) as.character(x) else "Unknown"
 rows <- list(
-  data.frame(Property = "Iterations per chain",
-             Value = if (!is.null(diag$n_iter)) as.character(diag$n_iter) else "Unknown",
-             stringsAsFactors = FALSE),
-  data.frame(Property = "Chains",
-             Value = if (!is.null(diag$n_chains)) as.character(diag$n_chains) else "Unknown",
-             stringsAsFactors = FALSE),
-  data.frame(Property = "Divergent transitions",
-             Value = if (!is.null(diag$n_div) && !is.na(diag$n_div)) as.character(diag$n_div) else "Unknown",
-             stringsAsFactors = FALSE),
-  data.frame(Property = "Parameters sampled",
-             Value = if (!is.null(diag$parameters)) as.character(length(diag$parameters)) else "Unknown",
-             stringsAsFactors = FALSE)
+  data.frame(
+    Property = "Iterations per chain",
+    Value    = chr_or_unk(diag$n_iter),
+    stringsAsFactors = FALSE),
+  data.frame(
+    Property = "Chains",
+    Value    = chr_or_unk(diag$n_chains),
+    stringsAsFactors = FALSE),
+  data.frame(
+    Property = "Divergent transitions",
+    Value    = if (!is.null(diag$n_div) && !is.na(diag$n_div))
+                 as.character(diag$n_div) else "Unknown",
+    stringsAsFactors = FALSE),
+  data.frame(
+    Property = "Parameters sampled",
+    Value    = if (!is.null(diag$parameters))
+                 as.character(length(diag$parameters)) else "Unknown",
+    stringsAsFactors = FALSE)
 )
 if (!is.null(diag$rhat)) {
   rh <- diag$rhat[is.finite(diag$rhat)]
   rows <- c(rows, list(
-    data.frame(Property = "Max Rhat",    Value = sprintf("%.4f", max(rh, na.rm=TRUE)), stringsAsFactors=FALSE),
-    data.frame(Property = "Rhat > 1.05", Value = as.character(sum(rh > 1.05, na.rm=TRUE)), stringsAsFactors=FALSE)
+    data.frame(
+      Property = "Max Rhat",
+      Value    = sprintf("%.4f", max(rh, na.rm = TRUE)),
+      stringsAsFactors = FALSE),
+    data.frame(
+      Property = "Rhat > 1.05",
+      Value    = as.character(sum(rh > 1.05, na.rm = TRUE)),
+      stringsAsFactors = FALSE)
   ))
 }
 if (!is.null(diag$ess)) {
   es <- diag$ess[is.finite(diag$ess)]
   rows <- c(rows, list(
-    data.frame(Property = "Min ESS",    Value = sprintf("%.0f", min(es, na.rm=TRUE)), stringsAsFactors=FALSE),
-    data.frame(Property = "Median ESS", Value = sprintf("%.0f", stats::median(es, na.rm=TRUE)), stringsAsFactors=FALSE)
+    data.frame(
+      Property = "Min ESS",
+      Value    = sprintf("%.0f", min(es, na.rm = TRUE)),
+      stringsAsFactors = FALSE),
+    data.frame(
+      Property = "Median ESS",
+      Value    = sprintf("%.0f", stats::median(es, na.rm = TRUE)),
+      stringsAsFactors = FALSE)
   ))
 }
 knitr::kable(
@@ -49,7 +69,8 @@ knitr::kable(
 ```{r mcmc_rhat, eval=!is.null(mv$mcmc_diagnostics$rhat)}
 rh <- mv$mcmc_diagnostics$rhat
 rh <- rh[is.finite(rh)]
-n_chains_diag <- if (!is.null(mv$mcmc_diagnostics$n_chains)) mv$mcmc_diagnostics$n_chains else 1L
+n_chains_diag <- if (!is.null(mv$mcmc_diagnostics$n_chains))
+  mv$mcmc_diagnostics$n_chains else 1L
 n_gt105 <- sum(rh > 1.05, na.rm = TRUE)
 n_gt101 <- sum(rh > 1.01, na.rm = TRUE)
 
@@ -89,83 +110,75 @@ modelVis::mv_config(p = p)
 
 ### ESS Distribution
 
-```{r mcmc_ess, eval=!is.null(mv$mcmc_diagnostics$ess)}
-es <- mv$mcmc_diagnostics$ess
-es <- es[is.finite(es)]
-n_chains_ess <- if (!is.null(mv$mcmc_diagnostics$n_chains)) mv$mcmc_diagnostics$n_chains else 1L
-thresh <- 100 * n_chains_ess
-n_low  <- sum(es < thresh, na.rm = TRUE)
-
-# Dotplot: 30 worst-ESS parameters
-top_n  <- min(30L, length(es))
-es_ord <- sort(es)[seq_len(top_n)]
-par_nm <- names(es_ord)
-if (is.null(par_nm)) par_nm <- paste0("par_", seq_along(es_ord))
-
-p <- plot_ly()
-p <- add_markers(
-  p = p,
-  x = es_ord,
-  y = factor(par_nm, levels = rev(par_nm)),
-  marker = list(color = "#1f77b4", size = 7,
-                line = list(color = "white", width = 0.5)),
-  showlegend = FALSE,
-  hovertemplate = "%{y}: ESS = %{x:.0f}<extra></extra>"
-)
-p <- add_trace(
-  p = p, type = "scatter", mode = "lines",
-  x = c(thresh, thresh), y = c(0.5, top_n + 0.5),
-  line = list(color = "#d62728", width = 1.5, dash = "dash"),
-  name = paste0("100×chains (", thresh, ")"), showlegend = TRUE
-)
-lay <- modelVis::mv_layout()
-lay$xaxis$title  <- "Effective sample size (ESS)"
-lay$yaxis$title  <- ""
-lay$showlegend   <- TRUE
-lay$height       <- max(300, top_n * 18)
-lay$annotations  <- list(list(
-  x = 0.98, y = 0.04, xref = "paper", yref = "paper",
-  text = paste0("ESS < ", thresh, ": ", n_low, " pars"),
-  showarrow = FALSE, xanchor = "right",
-  font = list(size = 11), bgcolor = "rgba(255,255,255,0.8)"
-))
-p <- do.call(layout, c(list(p = p), lay))
-modelVis::mv_config(p = p)
+```{r mcmc_ess, results='asis', eval=!is.null(mv$mcmc_diagnostics$ess)}
+hp <- mv$mcmc_diagnostics$hmc_plots
+if (!is.null(hp$change_ess) && isTRUE(hp$use_files)) {
+  cat('<img src="', hp$change_ess,
+      '" style="max-width:100%;height:auto;',
+      'display:block;margin:0 auto;" />\n', sep = "")
+} else if (!is.null(hp$change_ess)) {
+  print(hp$change_ess +
+    ggplot2::labs(
+      title   = paste0("ESS vs. draw count  (par: ",
+                       hp$par_name, ")"),
+      caption = "Dashed line = 400 draws threshold"))
+}
 ```
 
-### Spawning Biomass Posterior
+### Local ESS
 
-```{r mcmc_sb}
-mv_plot_trend(
-  df    = mv$spawning_biomass,
-  ylab  = "Spawning biomass",
-  title = "Spawning Biomass (posterior median + 95% CI)"
-)
+```{r mcmc_local_ess, results='asis', eval=!is.null(mv$mcmc_diagnostics$hmc_plots$local_ess)}
+hp <- mv$mcmc_diagnostics$hmc_plots
+if (isTRUE(hp$use_files)) {
+  cat('<img src="', hp$local_ess,
+      '" style="max-width:100%;height:auto;',
+      'display:block;margin:0 auto;" />\n', sep = "")
+} else {
+  print(hp$local_ess +
+    ggplot2::labs(
+      title   = paste0("Local ESS  (par: ", hp$par_name, ")"),
+      caption = paste0("Red rug = divergent transitions; ",
+                       "orange = max tree-depth")))
+}
 ```
 
-### Recruitment Posterior
+### Quantile ESS
 
-```{r mcmc_rec}
-mv_plot_trend(
-  df     = mv$recruitment,
-  ylab   = "Recruitment",
-  colour = "#2ca02c",
-  title  = "Recruitment (posterior median + 95% CI)"
-)
+```{r mcmc_quantile_ess, results='asis', eval=!is.null(mv$mcmc_diagnostics$hmc_plots$quantile_ess)}
+hp <- mv$mcmc_diagnostics$hmc_plots
+if (isTRUE(hp$use_files)) {
+  cat('<img src="', hp$quantile_ess,
+      '" style="max-width:100%;height:auto;',
+      'display:block;margin:0 auto;" />\n', sep = "")
+} else {
+  print(hp$quantile_ess +
+    ggplot2::labs(
+      title   = paste0("Quantile ESS  (par: ", hp$par_name, ")"),
+      caption = paste0("Red rug = divergent transitions; ",
+                       "orange = max tree-depth")))
+}
 ```
 
-### Legal HR Posterior
+### Rank Plots
 
-```{r mcmc_hr}
-mv_plot_trend(
-  df     = mv$legal_hr,
-  ylab   = "Legal harvest rate",
-  title  = "Legal HR (posterior median + 95% CI)",
-  ref_line = if (has_refpts &&
-    !is.null(mv$ref_points$lUmsy))
-    mv$ref_points$lUmsy else NULL,
-  ref_label = if (has_refpts &&
-    !is.null(mv$ref_points$lUmsy))
-    "Umsy" else NULL
-)
+```{r mcmc_rank_plots, results='asis', eval=!is.null(mv$mcmc_diagnostics$hmc_plots$rank_plots)}
+hp <- mv$mcmc_diagnostics$hmc_plots
+if (isTRUE(hp$use_files)) {
+  cat('<img src="', hp$rank_plots,
+      '" style="max-width:100%;height:auto;',
+      'display:block;margin:0 auto;" />\n', sep = "")
+} else {
+  print(hp$rank_plots +
+    ggplot2::labs(
+      title = paste0("Rank histogram  (par: ", hp$par_name, ")")))
+}
+```
+
+### Pairs (First Params)
+
+```{r mcmc_pairs1, results='asis', eval=!is.null(mv$mcmc_diagnostics$hmc_plots$pairs1_src)}
+hp <- mv$mcmc_diagnostics$hmc_plots
+cat('<img src="', hp$pairs1_src,
+    '" style="max-width:100%;height:auto;display:block;margin:0 auto;" />\n',
+    sep = "")
 ```

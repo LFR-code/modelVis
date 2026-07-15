@@ -109,7 +109,8 @@ modelVis::mv_config(p = p)
 ```{r obs_errors_table, eval=!is.null(mv$obs_errors)}
 oe <- mv$obs_errors
 rows <- list()
-# tau2Age: age-comp SD per area x fleet (sqrt of variance)
+# tau2Age: age-comp SD per area x fleet (sqrt of variance).
+# Show all fleets with positive finite values — matches dataCVtable.
 if (!is.null(oe$tau2Age)) {
   m <- oe$tau2Age
   for (p in seq_len(nrow(m)))
@@ -121,29 +122,36 @@ if (!is.null(oe$tau2Age)) {
       val <- m[p, g]
       if (is.finite(val) && val > 0)
         rows[[length(rows) + 1L]] <- data.frame(
-          Component = paste("Age SD", fl, ar),
-          Value     = round(sqrt(val), 4),
-          stringsAsFactors = FALSE
+            Component = paste("Age SD", fl, ar),
+            Value     = round(sqrt(val), 4),
+            stringsAsFactors = FALSE
         )
     }
 }
-# tauComb: combined index SD per area x fleet
+# tauComb: spawn survey SDs — show only fleets with no age-comp data,
+# i.e. survey-only fleets (matches tau^surv columns in dataCVtable).
 if (!is.null(oe$tauComb)) {
-  m <- oe$tauComb
-  for (p in seq_len(nrow(m)))
-    for (g in seq_len(ncol(m))) {
-      fl  <- if (!is.null(oe$fleet_names) && g <= length(oe$fleet_names))
-               oe$fleet_names[g] else paste("Fleet", g)
-      ar  <- if (!is.null(oe$area_names)  && p <= length(oe$area_names))
-               oe$area_names[p]  else paste("Area",  p)
-      val <- m[p, g]
-      if (is.finite(val) && val > 0)
-        rows[[length(rows) + 1L]] <- data.frame(
-          Component = paste("Index SD", fl, ar),
-          Value     = round(sqrt(val), 4),
-          stringsAsFactors = FALSE
-        )
+  m_tc <- oe$tauComb
+  m_ta <- oe$tau2Age
+  for (g in seq_len(ncol(m_tc))) {
+    has_age <- !is.null(m_ta) &&
+               any(is.finite(m_ta[, g]) & m_ta[, g] > 0)
+    fl <- if (!is.null(oe$fleet_names) && g <= length(oe$fleet_names))
+            oe$fleet_names[g] else paste("Fleet", g)
+    if (!has_age && !grepl("SOK", fl, ignore.case = TRUE)) {
+      for (p in seq_len(nrow(m_tc))) {
+        ar  <- if (!is.null(oe$area_names) && p <= length(oe$area_names))
+                 oe$area_names[p] else paste("Area", p)
+        val <- m_tc[p, g]
+        if (is.finite(val) && val > 0)
+          rows[[length(rows) + 1L]] <- data.frame(
+            Component = paste("Survey SD", fl, ar),
+            Value     = round(val, 4),
+            stringsAsFactors = FALSE
+          )
+      }
     }
+  }
 }
 # Effective sigma_R and sigma_M
 if (!is.null(oe$effsigR) && is.finite(oe$effsigR))

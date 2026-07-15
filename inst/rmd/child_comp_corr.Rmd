@@ -7,60 +7,43 @@ Row {.tabset}
 
 ### About
 
-Estimated age-composition correlation matrices (`Corr_gaa`) from the model.
-Each cell shows the correlation between age classes $a$ and $a'$ in the
-multinomial/Dirichlet-multinomial age-composition likelihood for that fleet.
-Strong off-diagonal correlations indicate that the model is compensating for
-systematic age-reading or selectivity patterns.
+Estimated age-composition correlation matrices (`Corr_gaa`) from the
+model. Each cell shows the correlation between age classes $a$ and $a'$
+in the compositional likelihood for that fleet.
+Upper triangle: coloured circles (area ∝ |r|, blue = positive,
+red = negative). Lower triangle: numeric values. Matches the
+Compositional Likelihood Correlation Matrices in the fit report.
 
 ```{r comp_corr_about}
 cc <- mv$comp_corr
 cat(sprintf("%d fleet(s) have correlation matrices.\n", length(cc)))
 for (item in cc)
-  cat(sprintf("  %s : %d × %d\n", item$fleet,
+  cat(sprintf("  %s : %d x %d\n", item$fleet,
               nrow(item$matrix), ncol(item$matrix)))
 ```
 
-### Heatmaps
+### Correlation Matrices
 
-```{r comp_corr_heatmaps}
-cc <- mv$comp_corr
-hm_plots <- lapply(cc, function(item) {
-  mat   <- item$matrix
-  n_age <- nrow(mat)
-  lbl   <- item$fleet
-
-  # Colour scale: blue-white-red centred at 0
-  p <- plot_ly(
-    z         = mat,
-    x         = colnames(mat),
-    y         = rownames(mat),
-    type      = "heatmap",
-    colorscale = list(
-      c(0, "#2166ac"), c(0.5, "#f7f7f7"), c(1, "#d6604d")
-    ),
-    zmin = -1, zmax = 1,
-    showscale  = TRUE,
-    hovertemplate = paste0(
-      "Age row %{y} × col %{x}<br>r = %{z:.3f}<extra>", lbl, "</extra>"
-    )
-  )
-  lay <- modelVis::mv_layout()
-  lay$xaxis$title <- "Age"
-  lay$yaxis$title <- "Age"
-  lay$annotations <- list(mv_top_label(label = lbl))
-  do.call(layout, c(list(p = p), lay))
-})
-
-if (length(hm_plots) > 1L) {
-  n_col <- min(length(hm_plots), 3L)
-  n_row <- ceiling(length(hm_plots) / n_col)
-  p_out <- do.call(subplot, c(hm_plots, list(
-    nrows = n_row, shareX = FALSE, shareY = FALSE,
-    titleX = TRUE, titleY = TRUE, margin = 0.08
-  )))
-  modelVis::mv_config(p = layout(p = p_out, showlegend = FALSE))
-} else if (length(hm_plots) == 1L) {
-  modelVis::mv_config(p = hm_plots[[1L]])
+```{r comp_corr_matrices, results='asis', eval=length(mv$comp_corr) > 0 && requireNamespace("corrplot", quietly = TRUE)}
+cc   <- mv$comp_corr
+nmat <- length(cc)
+for (i in seq_len(nmat)) {
+  tmp <- tempfile(fileext = ".png")
+  grDevices::png(tmp, width = 600L, height = 620L,
+                 units = "px", res = 96L)
+  corrplot::corrplot.mixed(
+    corr       = cc[[i]]$matrix,
+    lower.col  = "black",
+    number.cex = 0.7,
+    mar        = c(0, 0, 2, 0))
+  graphics::mtext(
+    text = cc[[i]]$fleet,
+    side = 3, line = 0.3, cex = 1.1, font = 2)
+  grDevices::dev.off()
+  sz  <- file.info(tmp)$size
+  b64 <- jsonlite::base64_enc(readBin(tmp, "raw", sz))
+  cat('<img src="data:image/png;base64,', b64,
+      '" style="width:600px;max-width:100%;',
+      'display:block;margin:0 auto 24px;" />\n', sep = "")
 }
 ```

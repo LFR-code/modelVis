@@ -29,7 +29,7 @@ da_stocks <- if ("stock" %in% names(da) &&
                  length(unique(da$stock)) > 1L)
                intersect(areas, unique(da$stock)) else NULL
 
-dtype_order <- c("Catch", "Index", "Length comp")
+dtype_order <- c("Catch", "Index", "Age comp", "Length comp")
 dtypes_used <- dtype_order[dtype_order %in% unique(da$datatype)]
 dtype_pos   <- setNames(seq_along(dtypes_used), dtypes_used)
 n_fl        <- length(fleets)
@@ -133,6 +133,21 @@ if (!is.null(da_stocks)) {
 
 ```{r model_info}
 dim_label <- if (has_len && is.null(mv$age_comp_fits)) "Lengths" else "Ages"
+
+max_grad <- mv$fit_diagnostics$max_grad
+max_grad_val <- if (is.null(max_grad) || !is.finite(max_grad)) {
+  "NA"
+} else {
+  formatC(x = max_grad, format = "e", digits = 2)
+}
+
+pd_hess <- mv$fit_diagnostics$pd_hess
+pd_hess_val <- if (is.null(pd_hess) || is.na(pd_hess)) {
+  "NA"
+} else {
+  ifelse(test = isTRUE(pd_hess), yes = "Yes", no = "No")
+}
+
 info_df <- data.frame(
   Property = c(
     "Model type", "Label",
@@ -141,7 +156,8 @@ info_df <- data.frame(
     "Commercial", "Survey",
     "Areas",
     "Length comps", "Discards",
-    "Density-dep M", "MCMC"
+    "Density-dep M", "MCMC",
+    "Max gradient", "PD Hessian"
   ),
   Value = c(
     meta$model_type,
@@ -156,7 +172,9 @@ info_df <- data.frame(
     ifelse(test = has_len, yes = "Yes", no = "No"),
     ifelse(test = has_disc, yes = "Yes", no = "No"),
     ifelse(test = is_ddm, yes = "Yes", no = "No"),
-    ifelse(test = has_mcmc, yes = "Yes", no = "No")
+    ifelse(test = has_mcmc, yes = "Yes", no = "No"),
+    max_grad_val,
+    pd_hess_val
   ),
   stringsAsFactors = FALSE
 )

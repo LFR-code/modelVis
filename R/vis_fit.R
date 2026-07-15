@@ -25,6 +25,10 @@
 #' @param output_file Path for the output HTML file.
 #'   If NULL, opens an interactive viewer via
 #'   \code{rmarkdown::run()}.
+#' @param folder Optional path to the fit output folder
+#'   containing pre-rendered diagnostic figures (e.g.
+#'   HMC diagnostic PDFs). Passed to the extractor and
+#'   useful when \code{fit$folder} is stale.
 #' @return Invisibly returns the path to the rendered
 #'   HTML file (if \code{output_file} is specified) or
 #'   NULL (if interactive viewer is used).
@@ -33,14 +37,15 @@ mv_dashboard <- function(fit,
                          label       = NULL,
                          comp        = NULL,
                          mcmc_probs  = c(0.025, 0.5, 0.975),
-                         output_file = NULL) {
+                         output_file = NULL,
+                         folder      = NULL) {
   if (is.null(label)) label <- ""
 
   # 1. Extract mv object (extractor populates lwr/upr
   #    from posteriors when available)
   mv <- extract(
     fit = fit, label = label,
-    mcmc_probs = mcmc_probs
+    mcmc_probs = mcmc_probs, folder = folder
   )
 
   # 2. Extract comparison models if provided

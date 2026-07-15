@@ -23,6 +23,7 @@ Imports:
     stats,
     utils
 Suggests:
+    corrplot,
     DT,
     flexdashboard,
     htmltools,

@@ -282,33 +282,24 @@ if (!is.null(bio_stks)) {
 ### Harvest Control Rule
 
 ```{r hcr_plot, eval=!is.null(mv$hcr)}
-hcr <- mv$hcr
-p   <- plot_ly()
+hcr          <- mv$hcr
+B0           <- hcr$B0
+predB        <- hcr$predB
+hcr_year     <- hcr$year
+def_Uref     <- hcr$Uref
+def_lcp_frac <- hcr$LCP / hcr$B0
+def_ucp_frac <- hcr$UCP / hcr$B0
 
-# HCR ramp curve
+wrapper_id <- "hcr_wrapper"
+
+# ---- Initial plotly ----
+p <- plot_ly()
 p <- add_trace(
   p = p, type = "scatter", mode = "lines",
   x = hcr$Bseq, y = hcr$Useq,
   line = list(color = "#333333", width = 2),
   name = "HCR", showlegend = FALSE,
-  hovertemplate = "B: %{x:.3g}<br>U: %{y:.4f}<extra>HCR</extra>"
-)
-
-# LCP / UCP reference lines
-lay <- modelVis::mv_layout()
-lay$shapes <- list(
-  list(type = "line", x0 = hcr$LCP, x1 = hcr$LCP,
-       y0 = 0, y1 = 1, yref = "paper",
-       line = list(color = "#d62728", width = 1.5, dash = "dash")),
-  list(type = "line", x0 = hcr$UCP, x1 = hcr$UCP,
-       y0 = 0, y1 = 1, yref = "paper",
-       line = list(color = "#ff7f0e", width = 1.5, dash = "dash")),
-  list(type = "line", x0 = hcr$B0, x1 = hcr$B0,
-       y0 = 0, y1 = 1, yref = "paper",
-       line = list(color = "#999999", width = 1, dash = "dot"))
-)
-
-# Current-year estimate
+  hovertemplate = "B: %{x:.3g}<br>U: %{y:.4f}<extra>HCR</extra>")
 p <- add_markers(
   p = p,
   x = hcr$predB, y = hcr$targU,
@@ -319,29 +310,194 @@ p <- add_markers(
     "Year: ", hcr$year,
     "<br>B̂: %{x:.3g}<br>U: %{y:.4f}",
     "<br>TAC: ", round(hcr$tac * 1000), " t",
-    "<extra>", hcr$year, "</extra>"
-  )
-)
+    "<extra>", hcr$year, "</extra>"))
 
-lay$xaxis$title <- "Spawning biomass"
-lay$yaxis$title <- "Harvest rate"
+lay <- modelVis::mv_layout()
+lay$shapes <- list(
+  list(type = "line", x0 = hcr$LCP, x1 = hcr$LCP,
+       y0 = 0, y1 = 1, yref = "paper",
+       line = list(color = "#d62728", width = 1.5, dash = "dash")),
+  list(type = "line", x0 = hcr$UCP, x1 = hcr$UCP,
+       y0 = 0, y1 = 1, yref = "paper",
+       line = list(color = "#ff7f0e", width = 1.5, dash = "dash")),
+  list(type = "line", x0 = hcr$B0, x1 = hcr$B0,
+       y0 = 0, y1 = 1, yref = "paper",
+       line = list(color = "#999999", width = 1, dash = "dot")))
+lay$xaxis$title     <- "Spawning biomass"
+lay$yaxis$title     <- "Harvest rate"
 lay$xaxis$rangemode <- "tozero"
 lay$yaxis$rangemode <- "tozero"
-lay$showlegend <- TRUE
-lay$annotations <- c(lay$annotations, list(
-  list(
-    x = hcr$predB, y = hcr$targU,
-    xref = "x", yref = "y",
-    text = paste0(
-      " B̂=", round(hcr$predB * 1000), "t",
-      "  U=", round(hcr$targU, 3),
-      "  TAC=", round(hcr$tac * 1000), "t"
-    ),
-    showarrow = FALSE, xanchor = "left",
-    font = list(size = 12, color = "#d62728"),
-    bgcolor = "rgba(255,255,255,0.8)"
-  )
-))
+lay$showlegend      <- TRUE
+lay$annotations <- list(list(
+  x = hcr$predB, y = hcr$targU,
+  xref = "x", yref = "y",
+  text = paste0(
+    " B̂=", round(hcr$predB * 1000), "t",
+    "  U=",      round(hcr$targU, 3),
+    "  TAC=",    round(hcr$tac * 1000), "t"),
+  showarrow = FALSE, xanchor = "left",
+  font = list(size = 12, color = "#d62728"),
+  bgcolor = "rgba(255,255,255,0.8)"))
+
 p <- do.call(what = layout, args = c(list(p = p), lay))
-modelVis::mv_config(p = p)
+p <- modelVis::mv_config(p = p)
+
+# ---- Input sidebar ----
+sty_panel <- paste0(
+  "width:200px; flex-shrink:0; padding:14px 12px; ",
+  "background:#f4f4f4; border-right:1px solid #ddd; ",
+  "overflow-y:auto; font-family:Arial,sans-serif;")
+sty_lbl <- paste0(
+  "display:block; margin-bottom:3px; font-weight:600; ",
+  "color:#333; font-size:12px;")
+sty_inp <- paste0(
+  "width:100%; padding:4px 6px; margin-bottom:14px; ",
+  "border:1px solid #bbb; border-radius:3px; font-size:13px; ",
+  "box-sizing:border-box;")
+sty_btn <- paste0(
+  "width:100%; padding:7px 6px; border:none; border-radius:3px; ",
+  "background:#555; color:white; font-size:13px; cursor:pointer; ",
+  "margin-top:2px; margin-bottom:12px;")
+sty_out <- paste0(
+  "padding:8px 10px; background:white; border:1px solid #ddd; ",
+  "border-radius:3px; font-size:12px; color:#333; line-height:1.7;")
+fmt2 <- function(x) formatC(x = x, digits = 2, format = "f")
+
+inp_panel <- htmltools::div(
+  style = sty_panel,
+  htmltools::tags$label(
+    `for` = "hcr_uref", style = sty_lbl, "Max harvest rate"),
+  htmltools::tags$input(
+    id = "hcr_uref", type = "number",
+    value = fmt2(def_Uref), min = "0", max = "1", step = "0.01",
+    style = sty_inp),
+  htmltools::tags$label(
+    `for` = "hcr_lcp", style = sty_lbl,
+    htmltools::HTML("Lower ctl pt (&times;B<sub>0</sub>)")),
+  htmltools::tags$input(
+    id = "hcr_lcp", type = "number",
+    value = fmt2(def_lcp_frac), min = "0", max = "0.99", step = "0.01",
+    style = sty_inp),
+  htmltools::tags$label(
+    `for` = "hcr_ucp", style = sty_lbl,
+    htmltools::HTML("Upper ctl pt (&times;B<sub>0</sub>)")),
+  htmltools::tags$input(
+    id = "hcr_ucp", type = "number",
+    value = fmt2(def_ucp_frac), min = "0.01", max = "1", step = "0.01",
+    style = sty_inp),
+  htmltools::tags$button(
+    id = "hcr_revert", style = sty_btn,
+    "↺ Revert to defaults"),
+  htmltools::div(
+    id = "hcr_out", style = sty_out,
+    htmltools::HTML(paste0(
+      "TAC: <strong>", round(hcr$tac * 1000), " t</strong><br>",
+      "U = <strong>",  round(hcr$targU, 3), "</strong>"))))
+
+# ---- Interactive JS ----
+js_code <- sprintf(
+'(function() {
+  var B0        = %g;
+  var predB     = %g;
+  var defUref   = %g;
+  var defLcp    = %g;
+  var defUcp    = %g;
+  var wrapperId = "%s";
+  var n         = 200;
+
+  function getGd() {
+    var w = document.getElementById(wrapperId);
+    return w ? w.querySelector(".plotly.html-widget") : null;
+  }
+
+  function linspace(a, b, n) {
+    var arr = new Array(n);
+    for (var i = 0; i < n; i++) arr[i] = a + (b - a) * i / (n - 1);
+    return arr;
+  }
+
+  function ramp(Bseq, LCP, UCP, Uref) {
+    return Bseq.map(function(b) {
+      if (b <= LCP) return 0;
+      if (b >= UCP) return Uref;
+      return Uref * (b - LCP) / (UCP - LCP);
+    });
+  }
+
+  function update() {
+    var gd = getGd();
+    if (!gd || !gd._fullData || !gd._fullData.length) return;
+
+    var Uref = parseFloat(document.getElementById("hcr_uref").value);
+    var lcp  = parseFloat(document.getElementById("hcr_lcp").value);
+    var ucp  = parseFloat(document.getElementById("hcr_ucp").value);
+    if (isNaN(Uref) || isNaN(lcp) || isNaN(ucp) || lcp >= ucp) return;
+
+    var LCP  = lcp * B0;
+    var UCP  = ucp * B0;
+    var xMax = Math.max(B0 * 1.1, UCP * 1.05, predB * 1.05);
+    var Bseq = linspace(0, xMax, n);
+    var Useq = ramp(Bseq, LCP, UCP, Uref);
+
+    var targU = predB <= LCP ? 0 :
+                predB >= UCP ? Uref :
+                Uref * (predB - LCP) / (UCP - LCP);
+    var tac = targU * predB;
+
+    Plotly.restyle(gd, { x: [Bseq], y: [Useq] }, [0]);
+    Plotly.restyle(gd, { x: [[predB]], y: [[targU]] }, [1]);
+    Plotly.relayout(gd, {
+      shapes: [
+        { type: "line", x0: LCP, x1: LCP, y0: 0, y1: 1, yref: "paper",
+          line: { color: "#d62728", width: 1.5, dash: "dash" } },
+        { type: "line", x0: UCP, x1: UCP, y0: 0, y1: 1, yref: "paper",
+          line: { color: "#ff7f0e", width: 1.5, dash: "dash" } },
+        { type: "line", x0: B0, x1: B0, y0: 0, y1: 1, yref: "paper",
+          line: { color: "#999999", width: 1, dash: "dot" } }
+      ],
+      "annotations[0].text":
+        " B̂=" + Math.round(predB * 1000) + "t" +
+        "  U="  + targU.toFixed(3) +
+        "  TAC=" + Math.round(tac * 1000) + "t",
+      "annotations[0].x": predB,
+      "annotations[0].y": targU
+    });
+    document.getElementById("hcr_out").innerHTML =
+      "TAC: <strong>" + Math.round(tac * 1000) + " t</strong><br>" +
+      "U = <strong>" + targU.toFixed(3) + "</strong>";
+  }
+
+  function revert() {
+    document.getElementById("hcr_uref").value = defUref;
+    document.getElementById("hcr_lcp").value  = defLcp;
+    document.getElementById("hcr_ucp").value  = defUcp;
+    update();
+  }
+
+  function attach() {
+    var uref = document.getElementById("hcr_uref");
+    if (!uref) { setTimeout(attach, 100); return; }
+    uref.addEventListener("input",  update);
+    uref.addEventListener("change", update);
+    document.getElementById("hcr_lcp").addEventListener("input",  update);
+    document.getElementById("hcr_lcp").addEventListener("change", update);
+    document.getElementById("hcr_ucp").addEventListener("input",  update);
+    document.getElementById("hcr_ucp").addEventListener("change", update);
+    document.getElementById("hcr_revert").addEventListener("click", revert);
+  }
+
+  setTimeout(attach, 0);
+})();',
+  B0, predB, def_Uref, def_lcp_frac, def_ucp_frac, wrapper_id)
+
+# ---- Compose: sidebar left, chart right ----
+htmltools::tagList(
+  htmltools::div(
+    id    = wrapper_id,
+    style = paste0(
+      "display:flex; height:100%; min-height:420px; ",
+      "font-family:Arial,sans-serif;"),
+    inp_panel,
+    htmltools::div(style = "flex:1; min-width:0;", p)),
+  htmltools::tags$script(htmltools::HTML(js_code)))
 ```
