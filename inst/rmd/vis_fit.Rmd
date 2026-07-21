@@ -73,6 +73,9 @@ is_mp      <- identical(meta$mode, "MP")
 ```{r child_len, child=system.file("rmd", "child_len_comps.Rmd", package = "modelVis"), eval=has_len}
 ```
 
+```{r child_prop_female, child=system.file("rmd", "child_prop_female.Rmd", package = "modelVis"), eval=!is.null(mv$prop_female_at_length)}
+```
+
 ```{r child_recruitment, child=system.file("rmd", "child_recruitment.Rmd", package = "modelVis")}
 ```
 

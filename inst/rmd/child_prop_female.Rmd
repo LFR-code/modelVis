@@ -1,0 +1,52 @@
+
+Proportion Female at Length {data-navmenu="Fits to Data"}
+=====================================
+
+Row
+-------------------------------------
+
+### Observed and Predicted Proportion Female at Length
+
+```{r pf_yearly_grid}
+pf         <- mv$prop_female_at_length
+pf_fleets  <- unique(pf$fleet)
+pf_has_stk <- "stock" %in% names(pf) && length(unique(pf$stock)) > 1L
+pf_stocks  <- if (pf_has_stk) unique(pf$stock) else NULL
+pf_has_q   <- "quarter" %in% names(pf) && length(unique(pf$quarter)) > 1L
+n_col_pf   <- 8L
+
+panel_list <- list()
+for (fl in pf_fleets) {
+  for (stk in if (!is.null(pf_stocks)) pf_stocks else list(NULL)) {
+    sub <- pf[pf$fleet == fl, , drop = FALSE]
+    if (!is.null(stk)) sub <- sub[sub$stock == stk, , drop = FALSE]
+    if (nrow(sub) == 0L) next
+
+    lbl <- if (!is.null(stk)) paste(fl, stk, sep = " - ") else fl
+    sub$year_q <- if (pf_has_q) paste0(sub$year, "-", sub$quarter) else
+                    as.character(sub$year)
+
+    n_yrq  <- length(unique(sub$year_q))
+    n_row  <- ceiling(n_yrq / n_col_pf)
+    h_fl   <- max(320L, 122L * n_row + 90L)
+
+    p <- mv_plot_comp_grid(
+      df             = sub,
+      bin_col        = "length",
+      ylab           = "Proportion female",
+      ncol           = n_col_pf,
+      years_per_page = Inf,
+      year_col       = "year_q"
+    )
+    p <- layout(p = p, title = lbl, margin = list(t = 50), height = h_fl)
+    p <- plotly::config(p, responsive = FALSE, displaylogo = FALSE,
+      modeBarButtonsToRemove = c("select2d", "lasso2d", "autoScale2d"))
+    p$height <- h_fl
+    panel_list[[length(panel_list) + 1L]] <- htmltools::div(
+      style = paste0("height:", h_fl, "px; margin-bottom:10px;"), p
+    )
+  }
+}
+
+htmltools::tagList(panel_list)
+```

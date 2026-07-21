@@ -63,9 +63,15 @@ make_fit_panel <- function(fl, stk, has_stk, panel_lbl) {
   all_pred <- sub[!is.na(sub$pred) & sub$pred > 0, , drop = FALSE]
   all_pred <- all_pred[order(all_pred[[x_col]]), , drop = FALSE]
   if (nrow(all_pred) > 0) {
-    p_fit <- add_lines(p = p_fit, x = all_pred[[x_col]], y = all_pred$pred,
-      line = list(color = fc[fl], width = 2), showlegend = FALSE,
-      visible = TRUE,
+    # mode = "lines+markers" with an invisible (opacity 0) marker: a pure
+    # "lines" trace's hover hit-area is just the rendered line pixels,
+    # which is hard to land the cursor on. The invisible marker gives each
+    # point a real hover target without changing how the line looks.
+    p_fit <- add_trace(p = p_fit, type = "scatter", mode = "lines+markers",
+      x = all_pred[[x_col]], y = all_pred$pred,
+      line = list(color = fc[fl], width = 2),
+      marker = list(color = fc[fl], size = 8, opacity = 0),
+      showlegend = FALSE, visible = TRUE,
       hovertemplate = "Pred %{x:.2f}: %{y:.3g}<extra></extra>")
     idx_single   <- trace_cursor
     trace_cursor <- trace_cursor + 1L
@@ -77,9 +83,11 @@ make_fit_panel <- function(fl, stk, has_stk, panel_lbl) {
       q_sub    <- sub[sub$quarter == q, , drop = FALSE]
       pred_sub <- q_sub[!is.na(q_sub$pred) & q_sub$pred > 0, , drop = FALSE]
       if (nrow(pred_sub) > 0) {
-        p_fit <- add_lines(p = p_fit, x = pred_sub[[x_col]], y = pred_sub$pred,
-          line = list(color = fc[fl], width = 2), showlegend = FALSE,
-          visible = FALSE,
+        p_fit <- add_trace(p = p_fit, type = "scatter", mode = "lines+markers",
+          x = pred_sub[[x_col]], y = pred_sub$pred,
+          line = list(color = fc[fl], width = 2),
+          marker = list(color = fc[fl], size = 8, opacity = 0),
+          showlegend = FALSE, visible = FALSE,
           hovertemplate = paste0("Q", q, " Pred %{x:.2f}: %{y:.3g}<extra></extra>"))
         idx_q_pred   <- c(idx_q_pred, trace_cursor)
         trace_cursor <- trace_cursor + 1L
@@ -121,7 +129,14 @@ make_fit_panel <- function(fl, stk, has_stk, panel_lbl) {
 
   list(
     p          = do.call(what = layout, args = c(list(p = p_fit), lay_fit)),
-    n_traces   = trace_cursor,
+    # subplot() silently injects one placeholder trace for any panel that
+    # never called add_trace()/add_markers() (e.g. a stock with no rows
+    # for this fleet) -- an empty plot_ly() object still occupies exactly
+    # one trace slot in the merged widget. Report that phantom slot here
+    # so downstream trace-index offsets (computed from n_traces) match
+    # the real runtime layout; otherwise every panel after an empty one
+    # gets its toggle indices off by one per empty panel before it.
+    n_traces   = max(trace_cursor, 1L),
     idx_single = idx_single,
     idx_q_pred = idx_q_pred
   )
@@ -163,13 +178,17 @@ attach_idx_toggle <- function(p, panel_results, offsets) {
   }, panel_results, offsets, SIMPLIFY = FALSE))
   if (length(toggle_idxs) == 0L) return(p)
 
+  # unlist() promotes a mix of logical and integer(0) placeholders to
+  # integer (TRUE/FALSE -> 1/0); Plotly's `visible` attribute strictly
+  # requires a real boolean (or "legendonly") and silently ignores a bare
+  # number, so the placeholder here must be logical(0), not integer(0).
   vis_s <- unlist(lapply(panel_results, function(res) {
     n_q <- length(res$idx_q_pred)
-    if (!is.na(res$idx_single) && n_q > 0) c(TRUE, rep(FALSE, n_q)) else integer(0)
+    if (!is.na(res$idx_single) && n_q > 0) c(TRUE, rep(FALSE, n_q)) else logical(0)
   }))
   vis_q <- unlist(lapply(panel_results, function(res) {
     n_q <- length(res$idx_q_pred)
-    if (!is.na(res$idx_single) && n_q > 0) c(FALSE, rep(TRUE, n_q)) else integer(0)
+    if (!is.na(res$idx_single) && n_q > 0) c(FALSE, rep(TRUE, n_q)) else logical(0)
   }))
 
   meta_json <- jsonlite::toJSON(list(

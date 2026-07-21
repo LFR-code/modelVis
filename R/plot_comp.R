@@ -42,26 +42,29 @@ mv_plot_comp_fit <- function(df, bin_col = "age",
     )
   )
 
-  # Predicted: coloured points + line
+  # Predicted: coloured points + line. Hovertemplate lives on the marker
+  # trace (sized up from a decorative 4px dot to a 7px hit target) --
+  # see mv_plot_comp_grid() for why this beats adding a separate
+  # invisible marker trace.
   p <- add_lines(
     p = p,
     y    = ~pred,
     name = "Predicted",
     line = list(color = pred_colour, width = 1.5),
-    hovertemplate = paste0(
-      bin_col, " %{x}: %{y:.4f}<extra>Pred</extra>"
-    )
+    hoverinfo = "skip"
   )
   p <- add_markers(
     p = p,
     y    = ~pred,
     name = "Predicted",
     marker = list(
-      color = pred_colour, size = 4,
+      color = pred_colour, size = 7,
       line = list(color = "white", width = 0.5)
     ),
     showlegend = FALSE,
-    hoverinfo = "skip"
+    hovertemplate = paste0(
+      bin_col, " %{x}: %{y:.4f}<extra>Pred</extra>"
+    )
   )
 
   lay <- .mv_layout()
@@ -140,26 +143,30 @@ mv_plot_comp_grid <- function(df, bin_col = "age",
       )
     )
 
-    # Coloured points + line for predicted
+    # Coloured points + line for predicted. The hovertemplate lives on the
+    # marker trace, sized up a little from a purely decorative dot (3px)
+    # to a real hit target (7px) -- cheaper than a separate invisible
+    # marker trace (which duplicates the x/y data per panel and roughly
+    # doubled dashboard file size across a full length-comp grid).
     p <- add_lines(
       p = p, y = ~pred,
       line = list(
         color = pred_colour, width = 1.5
       ),
       showlegend = FALSE,
-      hovertemplate = paste0(
-        yr, " ", bin_col, " %{x}: %{y:.4f}",
-        "<extra>Pred</extra>"
-      )
+      hoverinfo = "skip"
     )
     p <- add_markers(
       p = p, y = ~pred,
       marker = list(
-        color = pred_colour, size = 3,
+        color = pred_colour, size = 7,
         line = list(color = "white", width = 0.3)
       ),
       showlegend = FALSE,
-      hoverinfo = "skip"
+      hovertemplate = paste0(
+        yr, " ", bin_col, " %{x}: %{y:.4f}",
+        "<extra>Pred</extra>"
+      )
     )
 
     lay <- .mv_layout()

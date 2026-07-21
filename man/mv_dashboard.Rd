@@ -9,7 +9,8 @@ mv_dashboard(
   label = NULL,
   comp = NULL,
   mcmc_probs = c(0.025, 0.5, 0.975),
-  output_file = NULL
+  output_file = NULL,
+  folder = NULL
 )
 }
 \arguments{
@@ -33,6 +34,11 @@ interval. Ignored when posteriors are not available.}
 \item{output_file}{Path for the output HTML file.
 If NULL, opens an interactive viewer via
 \code{rmarkdown::run()}.}
+
+\item{folder}{Optional path to the fit output folder
+containing pre-rendered diagnostic figures (e.g.
+HMC diagnostic PDFs). Passed to the extractor and
+useful when \code{fit$folder} is stale.}
 }
 \value{
 Invisibly returns the path to the rendered

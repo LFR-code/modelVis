@@ -1,3 +1,81 @@
+# modelVis 0.1.9
+
+## Lazy tab/page rendering
+
+* **`mv_lazy_tabs()`** (internal, called automatically by
+  `mv_dashboard()`/`mv_sim_dashboard()` after rendering): flexdashboard
+  turns every top-level page and every `{.tabset}` Row into a Bootstrap
+  tab-pane at runtime, but that's a pure CSS `display:none` toggle --
+  `HTMLWidgets.staticRender()` still calls `Plotly.newPlot()` for every
+  widget on every page/tab regardless of visibility, so a large
+  dashboard fully renders everything before the user sees the first
+  page.
+* htmlwidgets' `find()` matches a widget's container `<div>` purely by
+  CSS class (e.g. `.plotly`), independent of whether its paired JSON
+  data script exists, and marks any found element
+  `html-widget-static-bound` the moment it's found -- so hiding only
+  the JSON script is a no-op; a later restore + re-render is skipped
+  because the container was already marked bound on the first pass.
+  The fix renames the widget's own class token (`plotly` ->
+  `mv-lazy-plotly`) on every widget outside the default page/tab, so
+  `find()` doesn't match it at all on the first pass.
+* Rather than waiting for a tab to be shown, a small injected script
+  restores and binds every deferred widget in the background, a few
+  at a time via `setTimeout`, right after the default page finishes
+  loading -- so non-default pages are usually already rendered by the
+  time the user switches to them. `Plotly.newPlot()` on a
+  `display:none` container measures 0x0 at creation time, which is
+  harmless as long as something forces a resize once the container
+  becomes visible; a periodic `window.dispatchEvent(new
+  Event("resize"))` covers that via htmlwidgets' own resize listener.
+* Implementation note: the balanced-`<div>` scanner used to find each
+  page/tab's true boundary masks `<script>` bodies first, since plotly
+  widget JSON or hand-written `<script>` chunks can contain
+  `<div`/`</div>`-like substrings inside string values that would
+  otherwise be miscounted as real markup. The mask regex needs the
+  `(?s)` (DOTALL) modifier -- without it, multi-line `<script>` blocks
+  silently fail to match, leaving their real tags to be double-counted
+  by later scans.
+
+## Index fits: Single line / Per quarter toggle
+
+* **Trace-index offset bug**: `subplot()` silently allocates a
+  placeholder trace for any panel built from an empty `plot_ly()` call
+  (e.g. a stock with zero rows for a given fleet, rendered as a blank
+  panel for column alignment) -- an "empty" panel still occupies one
+  real trace slot in the merged widget. `child_index_fits.Rmd`'s
+  toggle-index bookkeeping assumed such panels contributed zero
+  traces, so every trace index computed for panels after one or more
+  empty panels was off by the number of empty panels before it. Fixed
+  by reporting `n_traces = max(trace_cursor, 1L)` per panel so the
+  offset matches the real runtime layout.
+* **Boolean-coercion bug**: the toggle's `visible` arrays were built
+  by `unlist()`-ing a mix of logical vectors (real panels) and
+  `integer(0)` placeholders (empty panels); `unlist()` promotes mixed
+  logical/integer input to integer, turning `TRUE`/`FALSE` into
+  `1`/`0`. Plotly's `visible` attribute strictly requires a real
+  boolean (or `"legendonly"`) and silently ignores a bare number, so
+  the affected traces never actually toggled. Fixed by using
+  `logical(0)` as the placeholder instead.
+
+# modelVis 0.1.8
+
+## Index-fit hover/rendering fixes (driven by SISCAL dashboard work)
+
+* **Composition plot hover**: `mv_plot_comp_grid()`/`mv_plot_comp_fit()`
+  had a decorative marker trace with `hoverinfo = "skip"`, leaving only
+  a thin, hard-to-hit line trace with a working tooltip. Fixed by
+  moving the hovertemplate onto that marker trace (sized up slightly
+  to be a real hit target) instead of adding a duplicate trace -- an
+  earlier attempt at this fix via a separate invisible marker trace
+  per panel roughly doubled dashboard file size across a full
+  length-comp grid; reverted in favour of this cheaper approach.
+
+* **Index fits hover**: same issue in `child_index_fits.Rmd`'s pred
+  lines; fixed by switching those traces to `mode = "lines+markers"`
+  with an invisible marker layer (no extra trace, no data
+  duplication).
+
 # modelVis 0.1.7
 
 ## SISCAH dashboard: population dynamics plots

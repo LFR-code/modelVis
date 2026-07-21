@@ -99,6 +99,7 @@ mv_dashboard <- function(fit,
       envir       = new.env(parent = globalenv()),
       quiet       = TRUE
     )
+    mv_lazy_tabs(out)
     message("Dashboard written to: ", out)
     invisible(out)
   }

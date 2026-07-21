@@ -134,6 +134,20 @@ if (!is.null(da_stocks)) {
 ```{r model_info}
 dim_label <- if (has_len && is.null(mv$age_comp_fits)) "Lengths" else "Ages"
 
+# meta$bins_used (siscaL): the length-bin range actually considered by
+# the model (bins outside this get selectivity forced to 0, so are
+# never populated) -- narrower than the full ages/len_bins vector.
+# Show "used (full)" when it's present and differs from the full range.
+dim_value <- if (dim_label == "Lengths" && !is.null(meta$bins_used) &&
+                 !identical(as.numeric(meta$bins_used), c(min(ages), max(ages)))) {
+  paste0(
+    meta$bins_used[1L], " - ", meta$bins_used[2L],
+    " (", min(ages), " - ", max(ages), ")"
+  )
+} else {
+  paste(min(ages), "-", max(ages))
+}
+
 max_grad <- mv$fit_diagnostics$max_grad
 max_grad_val <- if (is.null(max_grad) || !is.finite(max_grad)) {
   "NA"
@@ -163,7 +177,7 @@ info_df <- data.frame(
     meta$model_type,
     meta$label,
     paste(min(years), "-", max(years)),
-    paste(min(ages), "-", max(ages)),
+    dim_value,
     paste(sexes, collapse = ", "),
     paste(fleets, collapse = ", "),
     paste(comm_fleets, collapse = ", "),
