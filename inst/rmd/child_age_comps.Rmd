@@ -107,9 +107,11 @@ p_out <- layout(
 modelVis::mv_config(p = p_out)
 ```
 
-### Residual Bubbles
+```{r age_resid_bubble_heading, results='asis', echo=FALSE, eval=!is.null(mv$age_comp_resids)}
+cat("\n### Residual Bubbles\n")
+```
 
-```{r age_resid_bubble}
+```{r age_resid_bubble, eval=!is.null(mv$age_comp_resids)}
 if (!is.null(mv$age_comp_resids)) {
   resid_plots <- list()
   for (fl in age_fleets) {

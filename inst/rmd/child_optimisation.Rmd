@@ -104,7 +104,9 @@ p <- do.call(
 modelVis::mv_config(p = p)
 ```
 
-### Observational Errors
+```{r obs_errors_heading, results='asis', echo=FALSE, eval=!is.null(mv$obs_errors)}
+cat("\n### Observational Errors\n")
+```
 
 ```{r obs_errors_table, eval=!is.null(mv$obs_errors)}
 oe <- mv$obs_errors
@@ -175,7 +177,9 @@ if (length(rows) > 0) {
 }
 ```
 
-### Phase Table
+```{r phase_table_heading, results='asis', echo=FALSE, eval=!is.null(mv$fit_diagnostics$fit_report)}
+cat("\n### Phase Table\n")
+```
 
 ```{r phase_table, eval=!is.null(mv$fit_diagnostics$fit_report)}
 fr <- mv$fit_diagnostics$fit_report
@@ -197,7 +201,9 @@ knitr::kable(
 )
 ```
 
-### Parameter Estimates
+```{r grad_table_heading, results='asis', echo=FALSE, eval=!is.null(mv$fit_diagnostics$grad_table)}
+cat("\n### Parameter Estimates\n")
+```
 
 ```{r grad_table_dt, eval=!is.null(mv$fit_diagnostics$grad_table)}
 gt <- as.data.frame(mv$fit_diagnostics$grad_table)

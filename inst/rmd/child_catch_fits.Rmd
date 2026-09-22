@@ -226,7 +226,9 @@ if (nrow(disc_fl) > 0) {
 }
 ```
 
-### Observation Error
+```{r obs_error_heading, results='asis', echo=FALSE, eval=!is.null(mv$obs_error) && is.data.frame(mv$obs_error) && "tau" %in% names(mv$obs_error)}
+cat("\n### Observation Error\n")
+```
 
 ```{r obs_error_table, eval=!is.null(mv$obs_error) && is.data.frame(mv$obs_error) && "tau" %in% names(mv$obs_error)}
 oe <- mv$obs_error

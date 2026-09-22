@@ -53,6 +53,19 @@ has_sr     <- !is.null(mv$sr_params) &&
               !is.null(mv$sr_params$reca)
 is_ddm     <- isTRUE(meta$is_ddm)
 is_mp      <- identical(meta$mode, "MP")
+
+# .mv_has_data(): a component isn't "present" just because it's a
+# non-NULL data.frame -- an extractor may supply an empty or
+# all-NA placeholder for a component its model has no real content
+# for (rather than omitting it, when a downstream panel reads it
+# unconditionally; see sableMP2026's Emp-EM extractor for why). Page-
+# and tab-level eval= guards should check for real values, not merely
+# non-NULL, so a page that would otherwise render blank is skipped
+# instead.
+.mv_has_data <- function(df, col) {
+  !is.null(df) && is.data.frame(df) && nrow(df) > 0 &&
+    col %in% names(df) && any(!is.na(df[[col]]))
+}
 ```
 
 ```{r child_data, child=system.file("rmd", "child_data_summary.Rmd", package = "modelVis")}
@@ -61,10 +74,10 @@ is_mp      <- identical(meta$mode, "MP")
 ```{r child_glance, child=system.file("rmd", "child_at_a_glance.Rmd", package = "modelVis")}
 ```
 
-```{r child_index, child=system.file("rmd", "child_index_fits.Rmd", package = "modelVis")}
+```{r child_index, child=system.file("rmd", "child_index_fits.Rmd", package = "modelVis"), eval=.mv_has_data(mv$index_fits, "obs")}
 ```
 
-```{r child_catch, child=system.file("rmd", "child_catch_fits.Rmd", package = "modelVis")}
+```{r child_catch, child=system.file("rmd", "child_catch_fits.Rmd", package = "modelVis"), eval=.mv_has_data(mv$catch_fits, "obs")}
 ```
 
 ```{r child_age, child=system.file("rmd", "child_age_comps.Rmd", package = "modelVis"), eval=!is.null(mv$age_comp_fits)}
@@ -76,10 +89,10 @@ is_mp      <- identical(meta$mode, "MP")
 ```{r child_prop_female, child=system.file("rmd", "child_prop_female.Rmd", package = "modelVis"), eval=!is.null(mv$prop_female_at_length)}
 ```
 
-```{r child_recruitment, child=system.file("rmd", "child_recruitment.Rmd", package = "modelVis")}
+```{r child_recruitment, child=system.file("rmd", "child_recruitment.Rmd", package = "modelVis"), eval=.mv_has_data(mv$recruitment, "est")}
 ```
 
-```{r child_mortality, child=system.file("rmd", "child_mortality.Rmd", package = "modelVis")}
+```{r child_mortality, child=system.file("rmd", "child_mortality.Rmd", package = "modelVis"), eval=!is.null(mv$fishing_mortality)}
 ```
 
 ```{r child_sel, child=system.file("rmd", "child_selectivity.Rmd", package = "modelVis"), eval=!is.null(mv$selectivity_at_age) || !is.null(mv$selectivity_at_length) || !is.null(mv$size_transition)}

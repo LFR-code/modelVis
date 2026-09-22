@@ -2,12 +2,21 @@
 At a Glance
 =====================================
 
-Row
--------------------------------------
+```{r glance_setup, include=FALSE}
+# A placeholder single point (e.g. a method with no fitted trend to
+# show, only a current-year estimate -- see the sableMP2026 Emp-EM
+# discussion in that package's docs/PLAN-report.md) is not a trend to
+# plot. Rows/tabs below gate on this rather than plain non-NULL so
+# they disappear instead of rendering near-empty.
+has_bio_trend <- !is.null(mv$spawning_biomass) &&
+  nrow(mv$spawning_biomass) > 1L
+```
 
-### Spawning Biomass, Recruitment, and Harvest Rate
+```{r glance_biomass_heading, results='asis', echo=FALSE, eval=has_bio_trend}
+cat("\nRow\n-------------------------------------\n\n### Spawning Biomass, Recruitment, and Harvest Rate\n")
+```
 
-```{r at_a_glance_stack}
+```{r at_a_glance_stack, eval=has_bio_trend}
 sb        <- mv$spawning_biomass
 sb_stks   <- if ("stock" %in% names(sb) && length(unique(sb$stock)) > 1L) unique(sb$stock) else NULL
 rec       <- mv$recruitment
@@ -192,9 +201,11 @@ modelVis::mv_config(p = p_out)
 Row {.tabset}
 -------------------------------------
 
-### All Biomass Components
+```{r all_bio_heading, results='asis', echo=FALSE, eval=has_bio_trend && (is.null(meta$model_type) || meta$model_type != "siscaL")}
+cat("\n### All Biomass Components\n")
+```
 
-```{r all_bio, eval=is.null(meta$model_type) || meta$model_type != "siscaL"}
+```{r all_bio, eval=has_bio_trend && (is.null(meta$model_type) || meta$model_type != "siscaL")}
 sb      <- mv$spawning_biomass
 bio_stks <- if ("stock" %in% names(sb) && length(unique(sb$stock)) > 1L) unique(sb$stock) else NULL
 bio_pal  <- c("#d62728", "#1f77b4", "#ff7f0e", "#2ca02c", "#9467bd")
@@ -290,6 +301,19 @@ def_Uref     <- hcr$Uref
 def_lcp_frac <- hcr$LCP / hcr$B0
 def_ucp_frac <- hcr$UCP / hcr$B0
 
+# A model with a second, differently-scoped ramp (mv$hcr_sublegal) has
+# two "B̂"/"U" quantities in adjacent tabs with different values and
+# the same generic name -- meta$hcr_label distinguishes them ("Legal",
+# e.g.) without changing anything for a model that only has the one
+# ramp, where the unlabelled generic text is unambiguous and stays as
+# it was.
+hcr_lbl    <- if (!is.null(meta$hcr_label) && nzchar(meta$hcr_label))
+  paste0(meta$hcr_label, " ") else ""
+hcr_xtitle <- if (nzchar(hcr_lbl))
+  paste0(meta$hcr_label, " biomass") else "Spawning biomass"
+hcr_ytitle <- if (nzchar(hcr_lbl))
+  paste0(meta$hcr_label, " harvest rate") else "Harvest rate"
+
 wrapper_id <- "hcr_wrapper"
 
 # ---- Initial plotly ----
@@ -299,7 +323,8 @@ p <- add_trace(
   x = hcr$Bseq, y = hcr$Useq,
   line = list(color = "#333333", width = 2),
   name = "HCR", showlegend = FALSE,
-  hovertemplate = "B: %{x:.3g}<br>U: %{y:.4f}<extra>HCR</extra>")
+  hovertemplate = paste0(hcr_lbl, "B: %{x:.3g}<br>", hcr_lbl,
+                        "U: %{y:.4f}<extra>HCR</extra>"))
 p <- add_markers(
   p = p,
   x = hcr$predB, y = hcr$targU,
@@ -308,7 +333,7 @@ p <- add_markers(
   name = as.character(hcr$year),
   hovertemplate = paste0(
     "Year: ", hcr$year,
-    "<br>B̂: %{x:.3g}<br>U: %{y:.4f}",
+    "<br>", hcr_lbl, "B̂: %{x:.3g}<br>", hcr_lbl, "U: %{y:.4f}",
     "<br>TAC: ", round(hcr$tac * 1000), " t",
     "<extra>", hcr$year, "</extra>"))
 
@@ -323,8 +348,8 @@ lay$shapes <- list(
   list(type = "line", x0 = hcr$B0, x1 = hcr$B0,
        y0 = 0, y1 = 1, yref = "paper",
        line = list(color = "#999999", width = 1, dash = "dot")))
-lay$xaxis$title     <- "Spawning biomass"
-lay$yaxis$title     <- "Harvest rate"
+lay$xaxis$title     <- hcr_xtitle
+lay$yaxis$title     <- hcr_ytitle
 lay$xaxis$rangemode <- "tozero"
 lay$yaxis$rangemode <- "tozero"
 lay$showlegend      <- TRUE
@@ -332,8 +357,8 @@ lay$annotations <- list(list(
   x = hcr$predB, y = hcr$targU,
   xref = "x", yref = "y",
   text = paste0(
-    " B̂=", round(hcr$predB * 1000), "t",
-    "  U=",      round(hcr$targU, 3),
+    " ", hcr_lbl, "B̂=", round(hcr$predB * 1000), "t",
+    "  ", hcr_lbl, "U=", round(hcr$targU, 3),
     "  TAC=",    round(hcr$tac * 1000), "t"),
   showarrow = FALSE, xanchor = "left",
   font = list(size = 12, color = "#d62728"),
@@ -392,7 +417,7 @@ inp_panel <- htmltools::div(
     id = "hcr_out", style = sty_out,
     htmltools::HTML(paste0(
       "TAC: <strong>", round(hcr$tac * 1000), " t</strong><br>",
-      "U = <strong>",  round(hcr$targU, 3), "</strong>"))))
+      hcr_lbl, "U = <strong>",  round(hcr$targU, 3), "</strong>"))))
 
 # ---- Interactive JS ----
 js_code <- sprintf(
@@ -403,6 +428,7 @@ js_code <- sprintf(
   var defLcp    = %g;
   var defUcp    = %g;
   var wrapperId = "%s";
+  var lbl       = "%s";
   var n         = 200;
 
   function getGd() {
@@ -456,15 +482,15 @@ js_code <- sprintf(
           line: { color: "#999999", width: 1, dash: "dot" } }
       ],
       "annotations[0].text":
-        " B̂=" + Math.round(predB * 1000) + "t" +
-        "  U="  + targU.toFixed(3) +
+        " " + lbl + "B̂=" + Math.round(predB * 1000) + "t" +
+        "  " + lbl + "U="  + targU.toFixed(3) +
         "  TAC=" + Math.round(tac * 1000) + "t",
       "annotations[0].x": predB,
       "annotations[0].y": targU
     });
     document.getElementById("hcr_out").innerHTML =
       "TAC: <strong>" + Math.round(tac * 1000) + " t</strong><br>" +
-      "U = <strong>" + targU.toFixed(3) + "</strong>";
+      lbl + "U = <strong>" + targU.toFixed(3) + "</strong>";
   }
 
   function revert() {
@@ -488,7 +514,7 @@ js_code <- sprintf(
 
   setTimeout(attach, 0);
 })();',
-  B0, predB, def_Uref, def_lcp_frac, def_ucp_frac, wrapper_id)
+  B0, predB, def_Uref, def_lcp_frac, def_ucp_frac, wrapper_id, hcr_lbl)
 
 # ---- Compose: sidebar left, chart right ----
 htmltools::tagList(
@@ -500,4 +526,90 @@ htmltools::tagList(
     inp_panel,
     htmltools::div(style = "flex:1; min-width:0;", p)),
   htmltools::tags$script(htmltools::HTML(js_code)))
+```
+
+### Sub-legal Cap (Tier 2 Ramp)
+
+```{r hcr_sublegal_plot, eval=!is.null(mv$hcr_sublegal)}
+# A second control rule, distinct in shape from mv$hcr: a two-tier
+# rule where the ramp's own ceiling and floor are set by a separate
+# ramp on a different biomass axis (e.g. a sub-legal-sized cohort
+# capped by a legal-sized-cohort-dependent ceiling), rather than one
+# ramp with fixed reference-point constants. mv$hcr's single-ramp
+# shape (one Bseq/Useq curve, one fixed Uref) can't represent that
+# dependency, so this is its own component -- a slice of the true
+# two-biomass-axis surface at the current tier-1 conditioning value,
+# not a second copy of the same panel. No interactive sliders (unlike
+# the tier-1 panel above): the ramp's own ceiling/floor move with the
+# conditioning biomass, which the slider machinery above doesn't
+# express and would misrepresent if copied verbatim.
+hs <- mv$hcr_sublegal
+
+# Same distinguishing-label mechanism as the tier-1 panel above, so
+# adjacent tabs don't show "B̂"/"U" with different values under the
+# same unlabelled name -- see hcr_lbl's comment there. Defaults to
+# "Sub-legal " rather than "", since unlike mv$hcr this component only
+# ever means the second, conditioned tier of a two-tier rule; a bare
+# "B̂"/"U" here would be the more likely source of confusion, not less.
+hs_lbl <- if (!is.null(meta$hcr_sublegal_label))
+  paste0(meta$hcr_sublegal_label, " ") else "Sub-legal "
+
+p2 <- plot_ly()
+p2 <- add_lines(
+  p = p2, x = hs$Bseq, y = hs$Useq,
+  line = list(color = "#333333", width = 2),
+  name = "Tier 2 ramp", showlegend = FALSE,
+  hovertemplate = paste0(hs_lbl, "B: %{x:.3g}<br>", hs_lbl,
+                        "U: %{y:.4f}<extra>Tier 2</extra>"))
+p2 <- add_markers(
+  p = p2,
+  x = hs$predB, y = hs$targU,
+  marker = list(color = "#d62728", size = 12, symbol = "circle",
+                line = list(color = "white", width = 1.5)),
+  name = as.character(hs$year),
+  hovertemplate = paste0(
+    "Year: ", hs$year,
+    "<br>", hs_lbl, "B̂: %{x:.3g}<br>", hs_lbl, "U: %{y:.4f}",
+    "<br>Cap: ", round(hs$tac * 1000), " t",
+    "<extra>", hs$year, "</extra>"))
+
+lay2 <- modelVis::mv_layout()
+lay2$shapes <- list(
+  list(type = "line", x0 = hs$LCP, x1 = hs$LCP,
+       y0 = 0, y1 = 1, yref = "paper",
+       line = list(color = "#d62728", width = 1.5, dash = "dash")),
+  list(type = "line", x0 = hs$UCP, x1 = hs$UCP,
+       y0 = 0, y1 = 1, yref = "paper",
+       line = list(color = "#ff7f0e", width = 1.5, dash = "dash")))
+lay2$xaxis$title     <- paste0(hs_lbl, "biomass")
+lay2$yaxis$title     <- paste0(hs_lbl, "harvest rate")
+lay2$xaxis$rangemode <- "tozero"
+lay2$yaxis$rangemode <- "tozero"
+lay2$showlegend      <- TRUE
+lay2$annotations <- list(list(
+  x = hs$predB, y = hs$targU,
+  xref = "x", yref = "y",
+  text = paste0(
+    " ", hs_lbl, "B̂=", round(hs$predB * 1000), "t",
+    "  ", hs_lbl, "U=", round(hs$targU, 3),
+    "  Cap=", round(hs$tac * 1000), "t"),
+  showarrow = FALSE, xanchor = "left",
+  font = list(size = 12, color = "#d62728"),
+  bgcolor = "rgba(255,255,255,0.8)"))
+
+p2 <- do.call(what = layout, args = c(list(p = p2), lay2))
+p2 <- modelVis::mv_config(p = p2)
+
+cond_note <- if (!is.null(hs$legB))
+  htmltools::div(
+    style = paste0("font-size:12px; color:#666; padding:4px 0 0 4px; ",
+                   "font-family:Arial,sans-serif;"),
+    paste0(
+      "Ramp ceiling (", round(hs$ceilingHR, 4),
+      ") and floor (", round(hs$floorHR, 4),
+      ") shown are as set by the current legal biomass estimate (",
+      round(hs$legB, 1), "), which this ramp is conditioned on -- ",
+      "not fixed constants like tier 1's."))
+
+htmltools::tagList(p2, cond_note)
 ```

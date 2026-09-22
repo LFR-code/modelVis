@@ -1,3 +1,64 @@
+# modelVis (unreleased)
+
+## Content-aware page and tab visibility
+
+* **A page or tab with nothing real to show is now omitted entirely,
+  rather than appearing empty.** Several pages in `vis_fit.Rmd`
+  (`child_index_fits.Rmd`, `child_catch_fits.Rmd`,
+  `child_recruitment.Rmd`, `child_mortality.Rmd`) and several
+  sub-tabs one level down inside otherwise-populated pages
+  (`child_recruitment.Rmd`'s "Stock-Recruitment";
+  `child_optimisation.Rmd`'s "Observational Errors", "Phase Table",
+  "Parameter Estimates"; `child_catch_fits.Rmd`'s "Observation
+  Error"; `child_age_comps.Rmd`'s "Residual Bubbles") were included
+  unconditionally, even though most of the dashboard's other
+  pages/tabs are already gated on `!is.null(mv$...)`. A model whose
+  extractor doesn't supply a component -- or supplies an empty/`NA`
+  placeholder because a downstream panel reads it unconditionally and
+  errors on `NULL` -- got a blank page or tab in the navbar instead of
+  no entry at all. Page-level gates use a new internal
+  `.mv_has_data(df, col)` helper (true only for a non-empty data.frame
+  with at least one non-`NA` value in the named column); sub-tab
+  headings, which are static markdown next to an already-gated
+  content chunk, are now emitted by a paired `results='asis'` chunk
+  under the same condition, so the heading and its content
+  appear or disappear together. Existing models with real content
+  everywhere these gates check are unaffected.
+* **The At-a-Glance page's "Spawning Biomass, Recruitment, and
+  Harvest Rate" panel and "All Biomass Components" tab** are gated
+  the same way, on a new `has_bio_trend` flag
+  (`nrow(mv$spawning_biomass) > 1`) rather than plain non-`NULL`: a
+  model whose extractor supplies only a single current-value point,
+  not a historical trend, previously got a panel with one dot on it.
+* **`mv$fit_diagnostics$max_grad` / `pd_hess`** (snake_case) already
+  had a home on the Data Summary page's "Model Information" table
+  (`child_data_summary.Rmd`) -- no new panel needed; a model package
+  just needs to supply them under those exact names.
+
+## Two-tier harvest control rules
+
+* **New `mv$hcr_sublegal` component**, read by a new "Sub-legal Cap
+  (Tier 2 Ramp)" tab on `child_at_a_glance.Rmd`, alongside the
+  existing "Harvest Control Rule" tab. For control rules that are
+  genuinely two-dimensional -- a cap ramped on one biomass axis whose
+  own ceiling and floor are themselves ramped on a second axis (as in
+  `sableMP2026`'s legal/sub-legal split) -- which `mv$hcr`'s shape
+  (one `Bseq`/`Useq` curve, one fixed `Uref`) can't represent.
+  `mv$hcr_sublegal` has the same shape as `mv$hcr` (`B0`, `LCP`,
+  `UCP`, `Bseq`, `Useq`, `predB`, `targU`, `tac`, `year`), plus
+  `ceilingHR`, `floorHR` and `legB` to make the conditioning explicit
+  in the panel. No interactive slider, unlike `mv$hcr`'s tab: the
+  ramp's own bounds move with the conditioning biomass, which the
+  existing slider JS has no way to express. `NULL` by default; every
+  other model's dashboard is unaffected.
+* **Both tiers' tabs label their "B̂"/"U" rather than leaving them
+  generic**, since a model with both shows two different values under
+  the same unlabelled name in adjacent tabs. New optional
+  `meta$hcr_label` (`mv$hcr`'s tab; defaults to `""`, i.e. unchanged
+  for a model with only one ramp) and `meta$hcr_sublegal_label`
+  (`mv$hcr_sublegal`'s tab; defaults to `"Sub-legal"`, since that
+  component only ever means a second tier).
+
 # modelVis 0.1.9
 
 ## Lazy tab/page rendering

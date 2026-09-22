@@ -100,7 +100,9 @@ if (!is.null(rec_stks)) {
 }
 ```
 
-### Stock-Recruitment
+```{r sr_heading, results='asis', echo=FALSE, eval=!is.null(mv$stock_recruit)}
+cat("\n### Stock-Recruitment\n")
+```
 
 ```{r sr_plot, eval=!is.null(mv$stock_recruit)}
 sr          <- mv$stock_recruit
