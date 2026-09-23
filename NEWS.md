@@ -1,4 +1,4 @@
-# modelVis (unreleased)
+# modelVis 0.1.10
 
 ## Content-aware page and tab visibility
 
