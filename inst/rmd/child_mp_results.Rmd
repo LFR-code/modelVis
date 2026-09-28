@@ -1,0 +1,542 @@
+MP Results
+=====================================
+
+```{r mpres_setup, include=FALSE}
+# has_mp_biomass mirrors child_at_a_glance.Rmd's has_bio_trend: a
+# single current-year point isn't a trend to plot against data.
+# has_mp_index covers a method with real index observations but no
+# fitted biomass at all (e.g. sableMP2026's Emp-EM, which reads
+# nothing but a pair of index series and was never a "fit" to begin
+# with) -- for it, the indices themselves ARE the evidence behind the
+# advice, just without a biomass line or catchability scaling to show
+# them in. Gate the whole panel on having either, so a method with
+# truly nothing (neither a biomass estimate nor index data) skips it
+# rather than rendering an empty shell.
+has_mp_biomass  <- .mv_has_data(mv$spawning_biomass, "est")
+has_mp_index    <- .mv_has_data(mv$index_fits, "obs")
+has_mp_evidence <- has_mp_biomass || has_mp_index
+
+# Exceptional Circumstances check: does real, post-projection-start
+# data still fall inside a closed-loop simulation's own envelope for
+# it. Needs at least one of the two panels to have an actual envelope
+# (lwr/upr), not just a shell with every row NA.
+has_ec_index <- .mv_has_data(mv$ec_index, "lwr")
+has_ec_catch <- .mv_has_data(mv$ec_catch, "lwr")
+has_ec_check <- has_ec_index || has_ec_catch
+```
+
+Row
+-------------------------------------
+
+```{r mp_evidence_heading, results='asis', echo=FALSE, eval=has_mp_evidence}
+cat("\n### ", if (has_mp_biomass)
+  "Biomass, Landings, and Scaled Indices" else "Abundance Indices",
+  "\n", sep = "")
+```
+
+```{r mp_evidence_plot, eval=has_mp_evidence}
+# The biomass estimate on its own doesn't show a reader that it's
+# built from real data -- this combines it with the landings and
+# abundance indices that fed it, in one panel, the same idea as
+# plotRetroAMB() (MS3) and the FSRR's own Figure 1: landings as bars,
+# indices as points scaled to biomass units by estimated catchability,
+# and the biomass trajectory as a line, all on one year axis. A method
+# with no fitted biomass and no catchability (nothing to scale by)
+# still gets its raw index series plotted here, rather than nowhere --
+# see has_mp_index above.
+bio_lbl <- if (!is.null(meta$hcr_label) && nzchar(meta$hcr_label))
+  paste0(meta$hcr_label, " biomass") else "Biomass"
+
+p <- plot_ly()
+
+if (!is.null(mv$landed_catch_total)) {
+  ct <- mv$landed_catch_total[order(mv$landed_catch_total$year), , drop = FALSE]
+  p <- add_bars(p = p, x = ct$year, y = ct$est,
+    marker = list(color = "rgba(150,150,150,0.5)"), name = "Landings",
+    yaxis = "y2", showlegend = TRUE,
+    hovertemplate = "Landings %{x}: %{y:.3g}<extra></extra>")
+}
+
+idx_pal <- c("#2ca02c", "#d62728", "#9467bd", "#1f77b4", "#ff7f0e")
+idx     <- mv$index_fits
+qdf     <- mv$catchability
+has_q   <- !is.null(idx) && !is.null(qdf) && nrow(qdf) > 0
+if (!is.null(idx)) {
+  if (has_q) {
+    idx <- merge(idx, qdf, by = "fleet", all.x = TRUE)
+    idx$scaled <- idx$obs / idx$q
+    # A fleet with q == 0 (never estimated a catchability, e.g. no
+    # index data at all) divides to Inf rather than NA, which
+    # !is.na() alone wouldn't catch -- is.finite() drops both.
+    idx <- idx[is.finite(idx$scaled), , drop = FALSE]
+  } else {
+    # No catchability to scale by (e.g. Emp-EM never estimates one) --
+    # plot the raw observations directly rather than inventing a scale.
+    idx$scaled <- idx$obs
+    idx <- idx[!is.na(idx$scaled), , drop = FALSE]
+  }
+  idx_fleets <- unique(idx$fleet)
+  for (fi in seq_along(idx_fleets)) {
+    fl    <- idx_fleets[fi]
+    idx_f <- idx[idx$fleet == fl, , drop = FALSE]
+    idx_f <- idx_f[order(idx_f$year), , drop = FALSE]
+    col   <- idx_pal[((fi - 1L) %% length(idx_pal)) + 1L]
+    # With no biomass line to anchor the panel (has_mp_index only),
+    # a line makes the index series themselves easier to read than
+    # points alone -- this is standing in for the "Index Fits" page
+    # a method like this has no fitted predictions to populate.
+    p <- if (has_mp_biomass)
+      add_markers(p = p, x = idx_f$year, y = idx_f$scaled,
+        marker = list(color = col, size = 7), name = fl,
+        hovertemplate = paste0(fl, " %{x}: %{y:.3g}<extra></extra>"))
+    else
+      add_trace(p = p, type = "scatter", mode = "lines+markers",
+        x = idx_f$year, y = idx_f$scaled,
+        line = list(color = col, width = 2),
+        marker = list(color = col, size = 6), name = fl,
+        hovertemplate = paste0(fl, " %{x}: %{y:.3g}<extra></extra>"))
+  }
+}
+
+if (has_mp_biomass) {
+  bio <- mv$spawning_biomass[order(mv$spawning_biomass$year), , drop = FALSE]
+  p <- add_lines(p = p, x = bio$year, y = bio$est,
+    line = list(color = "#222222", width = 2.5), name = bio_lbl,
+    hovertemplate = paste0(bio_lbl, " %{x}: %{y:.3g}<extra></extra>"))
+}
+
+lay <- modelVis::mv_layout()
+lay$xaxis$title      <- "Year"
+lay$yaxis$title       <- if (has_mp_biomass) bio_lbl else "Index"
+lay$yaxis$rangemode   <- "tozero"
+if (!is.null(mv$landed_catch_total)) {
+  # A landings axis auto-scaled to its own data fills the whole plot
+  # height with bars, competing with the biomass line for visual
+  # weight -- the FSRR's own Figure 1 avoids this by giving landings a
+  # much taller axis range than the data needs, so bars stay a
+  # secondary visual element (roughly the bottom quarter of the
+  # panel) rather than dominating it. Matched here the same way.
+  landMax <- max(mv$landed_catch_total$est, na.rm = TRUE)
+  lay$yaxis2 <- list(overlaying = "y", side = "right", title = "Landings",
+                     showgrid = FALSE, range = c(0, landMax * 4))
+  lay$barmode <- "overlay"
+}
+lay$showlegend <- TRUE
+p <- do.call(layout, c(list(p = p), lay))
+modelVis::mv_config(p = p)
+```
+
+Row {.tabset}
+-------------------------------------
+
+### Harvest Control Rule
+
+```{r hcr_plot, eval=!is.null(mv$hcr)}
+hcr          <- mv$hcr
+B0           <- hcr$B0
+predB        <- hcr$predB
+hcr_year     <- hcr$year
+def_Uref     <- hcr$Uref
+def_lcp_frac <- hcr$LCP / hcr$B0
+def_ucp_frac <- hcr$UCP / hcr$B0
+
+# A model with a second, differently-scoped ramp (mv$hcr_sublegal) has
+# two "B̂"/"U" quantities in adjacent tabs with different values and
+# the same generic name -- meta$hcr_label distinguishes them ("Legal",
+# e.g.) without changing anything for a model that only has the one
+# ramp, where the unlabelled generic text is unambiguous and stays as
+# it was.
+hcr_lbl    <- if (!is.null(meta$hcr_label) && nzchar(meta$hcr_label))
+  paste0(meta$hcr_label, " ") else ""
+
+# "B0" is this component's own generic field name (mv$hcr$B0), but
+# what it actually represents is model-specific -- for a model where
+# it's really a Bmsy-type productivity reference rather than unfished
+# biomass, labelling every axis/hover/sidebar "B0" is just wrong, not
+# a simplification. meta$hcr_bref_label overrides the display text;
+# defaults to "B0" so a model where that field really does mean
+# unfished biomass is unaffected.
+bref_lbl   <- if (!is.null(meta$hcr_bref_label) && nzchar(meta$hcr_bref_label))
+  meta$hcr_bref_label else "B0"
+hcr_xtitle <- paste0(if (nzchar(hcr_lbl)) meta$hcr_label else "Spawning",
+                     " biomass / ", bref_lbl)
+hcr_ytitle <- if (nzchar(hcr_lbl))
+  paste0(meta$hcr_label, " harvest rate") else "Harvest rate"
+
+# Plotted relative to B0 (ramp's own reference biomass, whatever it
+# represents for this model -- see bref_lbl above), not absolute kt --
+# matching how a Science Response Report's HCR figure plots target
+# harvest rate against B'_t/B'_MSY rather than an absolute scale.
+# def_lcp_frac/def_ucp_frac (above) are already LCP/B0 and UCP/B0, so
+# the OCP dashed lines below land at those same fractions; B0 itself
+# is then always the vertical line at x = 1. Hover text and the
+# annotation still report the absolute biomass/TAC figures -- only the
+# axis and the plotted x-positions change.
+BseqRatio  <- hcr$Bseq / B0
+predBRatio <- predB / B0
+
+wrapper_id <- "hcr_wrapper"
+
+# ---- Initial plotly ----
+p <- plot_ly()
+p <- add_trace(
+  p = p, type = "scatter", mode = "lines",
+  x = BseqRatio, y = hcr$Useq,
+  line = list(color = "#333333", width = 2),
+  name = "HCR", showlegend = FALSE,
+  hovertemplate = paste0(hcr_lbl, "B/", bref_lbl, ": %{x:.3g}<br>", hcr_lbl,
+                        "U: %{y:.4f}<extra>HCR</extra>"))
+p <- add_markers(
+  p = p,
+  x = predBRatio, y = hcr$targU,
+  marker = list(color = "#d62728", size = 12, symbol = "circle",
+                line = list(color = "white", width = 1.5)),
+  name = as.character(hcr$year),
+  hovertemplate = paste0(
+    "Year: ", hcr$year,
+    "<br>", hcr_lbl, "B/", bref_lbl, ": %{x:.3g}",
+    "<br>", hcr_lbl, "B̂: ", round(predB * 1000), " t",
+    "<br>", hcr_lbl, "U: %{y:.4f}",
+    "<br>TAC: ", round(hcr$tac * 1000), " t",
+    "<extra>", hcr$year, "</extra>"))
+
+lay <- modelVis::mv_layout()
+lay$shapes <- list(
+  list(type = "line", x0 = def_lcp_frac, x1 = def_lcp_frac,
+       y0 = 0, y1 = 1, yref = "paper",
+       line = list(color = "#d62728", width = 1.5, dash = "dash")),
+  list(type = "line", x0 = def_ucp_frac, x1 = def_ucp_frac,
+       y0 = 0, y1 = 1, yref = "paper",
+       line = list(color = "#ff7f0e", width = 1.5, dash = "dash")),
+  list(type = "line", x0 = 1, x1 = 1,
+       y0 = 0, y1 = 1, yref = "paper",
+       line = list(color = "#999999", width = 1, dash = "dot")))
+lay$xaxis$title     <- hcr_xtitle
+lay$yaxis$title     <- hcr_ytitle
+lay$xaxis$rangemode <- "tozero"
+lay$yaxis$rangemode <- "tozero"
+lay$showlegend      <- TRUE
+lay$annotations <- list(list(
+  x = predBRatio, y = hcr$targU,
+  xref = "x", yref = "y",
+  text = paste0(
+    " ", hcr_lbl, "B̂=", round(predB * 1000), "t",
+    "  ", hcr_lbl, "U=", round(hcr$targU, 3),
+    "  TAC=",    round(hcr$tac * 1000), "t"),
+  showarrow = FALSE, xanchor = "left",
+  font = list(size = 12, color = "#d62728"),
+  bgcolor = "rgba(255,255,255,0.8)"))
+
+p <- do.call(what = layout, args = c(list(p = p), lay))
+p <- modelVis::mv_config(p = p)
+
+# ---- Input sidebar ----
+sty_panel <- paste0(
+  "width:200px; flex-shrink:0; padding:14px 12px; ",
+  "background:#f4f4f4; border-right:1px solid #ddd; ",
+  "overflow-y:auto; font-family:Arial,sans-serif;")
+sty_lbl <- paste0(
+  "display:block; margin-bottom:3px; font-weight:600; ",
+  "color:#333; font-size:12px;")
+sty_inp <- paste0(
+  "width:100%; padding:4px 6px; margin-bottom:14px; ",
+  "border:1px solid #bbb; border-radius:3px; font-size:13px; ",
+  "box-sizing:border-box;")
+sty_btn <- paste0(
+  "width:100%; padding:7px 6px; border:none; border-radius:3px; ",
+  "background:#555; color:white; font-size:13px; cursor:pointer; ",
+  "margin-top:2px; margin-bottom:12px;")
+sty_out <- paste0(
+  "padding:8px 10px; background:white; border:1px solid #ddd; ",
+  "border-radius:3px; font-size:12px; color:#333; line-height:1.7;")
+fmt2 <- function(x) formatC(x = x, digits = 2, format = "f")
+# Max harvest rate needs a third digit -- 0.064 rounds to 0.06 at two
+# digits, silently showing the wrong default in the box.
+fmt3 <- function(x) formatC(x = x, digits = 3, format = "f")
+
+inp_panel <- htmltools::div(
+  style = sty_panel,
+  htmltools::tags$label(
+    `for` = "hcr_uref", style = sty_lbl, "Max harvest rate"),
+  htmltools::tags$input(
+    id = "hcr_uref", type = "number",
+    value = fmt3(def_Uref), min = "0", max = "1", step = "0.001",
+    style = sty_inp),
+  htmltools::tags$label(
+    `for` = "hcr_lcp", style = sty_lbl,
+    htmltools::HTML(paste0("Lower ctl pt (&times;", bref_lbl, ")"))),
+  htmltools::tags$input(
+    id = "hcr_lcp", type = "number",
+    value = fmt2(def_lcp_frac), min = "0", max = "0.99", step = "0.01",
+    style = sty_inp),
+  htmltools::tags$label(
+    `for` = "hcr_ucp", style = sty_lbl,
+    htmltools::HTML(paste0("Upper ctl pt (&times;", bref_lbl, ")"))),
+  htmltools::tags$input(
+    id = "hcr_ucp", type = "number",
+    value = fmt2(def_ucp_frac), min = "0.01", max = "1", step = "0.01",
+    style = sty_inp),
+  htmltools::tags$button(
+    id = "hcr_revert", style = sty_btn,
+    "↺ Revert to defaults"),
+  htmltools::div(
+    id = "hcr_out", style = sty_out,
+    htmltools::HTML(paste0(
+      "TAC: <strong>", round(hcr$tac * 1000), " t</strong><br>",
+      hcr_lbl, "U = <strong>",  round(hcr$targU, 3), "</strong>"))))
+
+# ---- Interactive JS ----
+# Operates entirely in ratio (B/B0) space now: defLcp/defUcp are
+# already fractions of B0, so the ramp bounds ARE the slider values,
+# with no *B0 conversion needed for the plotted x-positions. B0 is
+# still passed through, needed only to turn predB back into an
+# absolute biomass for the TAC = targU * predB calculation.
+js_code <- sprintf(
+'(function() {
+  var B0         = %g;
+  var predB      = %g;
+  var predBRatio = %g;
+  var defUref    = %g;
+  var defLcp     = %g;
+  var defUcp     = %g;
+  var wrapperId  = "%s";
+  var lbl        = "%s";
+  var n          = 200;
+
+  function getGd() {
+    var w = document.getElementById(wrapperId);
+    return w ? w.querySelector(".plotly.html-widget") : null;
+  }
+
+  function linspace(a, b, n) {
+    var arr = new Array(n);
+    for (var i = 0; i < n; i++) arr[i] = a + (b - a) * i / (n - 1);
+    return arr;
+  }
+
+  function ramp(Bseq, lcp, ucp, Uref) {
+    return Bseq.map(function(b) {
+      if (b <= lcp) return 0;
+      if (b >= ucp) return Uref;
+      return Uref * (b - lcp) / (ucp - lcp);
+    });
+  }
+
+  function update() {
+    var gd = getGd();
+    if (!gd || !gd._fullData || !gd._fullData.length) return;
+
+    var Uref = parseFloat(document.getElementById("hcr_uref").value);
+    var lcp  = parseFloat(document.getElementById("hcr_lcp").value);
+    var ucp  = parseFloat(document.getElementById("hcr_ucp").value);
+    if (isNaN(Uref) || isNaN(lcp) || isNaN(ucp) || lcp >= ucp) return;
+
+    var xMax = Math.max(1.1, ucp * 1.05, predBRatio * 1.05);
+    var Bseq = linspace(0, xMax, n);
+    var Useq = ramp(Bseq, lcp, ucp, Uref);
+
+    var targU = predBRatio <= lcp ? 0 :
+                predBRatio >= ucp ? Uref :
+                Uref * (predBRatio - lcp) / (ucp - lcp);
+    var tac = targU * predB;
+
+    Plotly.restyle(gd, { x: [Bseq], y: [Useq] }, [0]);
+    Plotly.restyle(gd, { x: [[predBRatio]], y: [[targU]] }, [1]);
+    Plotly.relayout(gd, {
+      shapes: [
+        { type: "line", x0: lcp, x1: lcp, y0: 0, y1: 1, yref: "paper",
+          line: { color: "#d62728", width: 1.5, dash: "dash" } },
+        { type: "line", x0: ucp, x1: ucp, y0: 0, y1: 1, yref: "paper",
+          line: { color: "#ff7f0e", width: 1.5, dash: "dash" } },
+        { type: "line", x0: 1, x1: 1, y0: 0, y1: 1, yref: "paper",
+          line: { color: "#999999", width: 1, dash: "dot" } }
+      ],
+      "annotations[0].text":
+        " " + lbl + "B̂=" + Math.round(predB * 1000) + "t" +
+        "  " + lbl + "U="  + targU.toFixed(3) +
+        "  TAC=" + Math.round(tac * 1000) + "t",
+      "annotations[0].x": predBRatio,
+      "annotations[0].y": targU
+    });
+    document.getElementById("hcr_out").innerHTML =
+      "TAC: <strong>" + Math.round(tac * 1000) + " t</strong><br>" +
+      lbl + "U = <strong>" + targU.toFixed(3) + "</strong>";
+  }
+
+  function revert() {
+    document.getElementById("hcr_uref").value = defUref;
+    document.getElementById("hcr_lcp").value  = defLcp;
+    document.getElementById("hcr_ucp").value  = defUcp;
+    update();
+  }
+
+  function attach() {
+    var uref = document.getElementById("hcr_uref");
+    if (!uref) { setTimeout(attach, 100); return; }
+    uref.addEventListener("input",  update);
+    uref.addEventListener("change", update);
+    document.getElementById("hcr_lcp").addEventListener("input",  update);
+    document.getElementById("hcr_lcp").addEventListener("change", update);
+    document.getElementById("hcr_ucp").addEventListener("input",  update);
+    document.getElementById("hcr_ucp").addEventListener("change", update);
+    document.getElementById("hcr_revert").addEventListener("click", revert);
+  }
+
+  setTimeout(attach, 0);
+})();',
+  B0, predB, predBRatio, def_Uref, def_lcp_frac, def_ucp_frac, wrapper_id, hcr_lbl)
+
+# ---- Compose: sidebar left, chart right ----
+htmltools::tagList(
+  htmltools::div(
+    id    = wrapper_id,
+    style = paste0(
+      "display:flex; height:100%; min-height:420px; ",
+      "font-family:Arial,sans-serif;"),
+    inp_panel,
+    htmltools::div(style = "flex:1; min-width:0;", p)),
+  htmltools::tags$script(htmltools::HTML(js_code)))
+```
+
+### Sub-legal Cap (Tier 2 Ramp)
+
+```{r hcr_sublegal_plot, eval=!is.null(mv$hcr_sublegal)}
+# A second control rule, distinct in shape from mv$hcr: a two-tier
+# rule where the ramp's own ceiling and floor are set by a separate
+# ramp on a different biomass axis (e.g. a sub-legal-sized cohort
+# capped by a legal-sized-cohort-dependent ceiling), rather than one
+# ramp with fixed reference-point constants. mv$hcr's single-ramp
+# shape (one Bseq/Useq curve, one fixed Uref) can't represent that
+# dependency, so this is its own component -- a slice of the true
+# two-biomass-axis surface at the current tier-1 conditioning value,
+# not a second copy of the same panel. No interactive sliders (unlike
+# the tier-1 panel above): the ramp's own ceiling/floor move with the
+# conditioning biomass, which the slider machinery above doesn't
+# express and would misrepresent if copied verbatim.
+hs <- mv$hcr_sublegal
+
+# Same distinguishing-label mechanism as the tier-1 panel above, so
+# adjacent tabs don't show "B̂"/"U" with different values under the
+# same unlabelled name -- see hcr_lbl's comment there. Defaults to
+# "Sub-legal " rather than "", since unlike mv$hcr this component only
+# ever means the second, conditioned tier of a two-tier rule; a bare
+# "B̂"/"U" here would be the more likely source of confusion, not less.
+hs_lbl <- if (!is.null(meta$hcr_sublegal_label))
+  paste0(meta$hcr_sublegal_label, " ") else "Sub-legal "
+
+# Same "B0" is-it-really-unfished-biomass override as the tier-1
+# panel -- see bref_lbl's comment there. Separate field: tier 1 and
+# tier 2 read from different config references and one being a
+# Bmsy-type quantity says nothing about the other.
+hs_bref_lbl <- if (!is.null(meta$hcr_sublegal_bref_label) &&
+                   nzchar(meta$hcr_sublegal_bref_label))
+  meta$hcr_sublegal_bref_label else "B0"
+
+# Same ratio-axis switch as the tier-1 panel: plotted against B/B0
+# rather than absolute kt.
+hsBseqRatio  <- hs$Bseq / hs$B0
+hsPredBRatio <- hs$predB / hs$B0
+hsLCPRatio   <- hs$LCP / hs$B0
+hsUCPRatio   <- hs$UCP / hs$B0
+
+p2 <- plot_ly()
+p2 <- add_lines(
+  p = p2, x = hsBseqRatio, y = hs$Useq,
+  line = list(color = "#333333", width = 2),
+  name = "Tier 2 ramp", showlegend = FALSE,
+  hovertemplate = paste0(hs_lbl, "B/", hs_bref_lbl, ": %{x:.3g}<br>", hs_lbl,
+                        "U: %{y:.4f}<extra>Tier 2</extra>"))
+p2 <- add_markers(
+  p = p2,
+  x = hsPredBRatio, y = hs$targU,
+  marker = list(color = "#d62728", size = 12, symbol = "circle",
+                line = list(color = "white", width = 1.5)),
+  name = as.character(hs$year),
+  hovertemplate = paste0(
+    "Year: ", hs$year,
+    "<br>", hs_lbl, "B/", hs_bref_lbl, ": %{x:.3g}",
+    "<br>", hs_lbl, "B̂: ", round(hs$predB * 1000), " t",
+    "<br>", hs_lbl, "U: %{y:.4f}",
+    "<br>Cap: ", round(hs$tac * 1000), " t",
+    "<extra>", hs$year, "</extra>"))
+
+lay2 <- modelVis::mv_layout()
+lay2$shapes <- list(
+  list(type = "line", x0 = hsLCPRatio, x1 = hsLCPRatio,
+       y0 = 0, y1 = 1, yref = "paper",
+       line = list(color = "#d62728", width = 1.5, dash = "dash")),
+  list(type = "line", x0 = hsUCPRatio, x1 = hsUCPRatio,
+       y0 = 0, y1 = 1, yref = "paper",
+       line = list(color = "#ff7f0e", width = 1.5, dash = "dash")))
+lay2$xaxis$title     <- paste0(hs_lbl, "biomass / ", hs_bref_lbl)
+lay2$yaxis$title     <- paste0(hs_lbl, "harvest rate")
+lay2$xaxis$rangemode <- "tozero"
+lay2$yaxis$rangemode <- "tozero"
+lay2$showlegend      <- TRUE
+lay2$annotations <- list(list(
+  x = hsPredBRatio, y = hs$targU,
+  xref = "x", yref = "y",
+  text = paste0(
+    " ", hs_lbl, "B̂=", round(hs$predB * 1000), "t",
+    "  ", hs_lbl, "U=", round(hs$targU, 3),
+    "  Cap=", round(hs$tac * 1000), "t"),
+  showarrow = FALSE, xanchor = "left",
+  font = list(size = 12, color = "#d62728"),
+  bgcolor = "rgba(255,255,255,0.8)"))
+
+p2 <- do.call(what = layout, args = c(list(p = p2), lay2))
+p2 <- modelVis::mv_config(p = p2)
+
+cond_note <- if (!is.null(hs$legB))
+  htmltools::div(
+    style = paste0("font-size:12px; color:#666; padding:4px 0 0 4px; ",
+                   "font-family:Arial,sans-serif;"),
+    paste0(
+      "Ramp ceiling (", round(hs$ceilingHR, 4),
+      ") and floor (", round(hs$floorHR, 4),
+      ") shown are as set by the current legal biomass estimate (",
+      round(hs$legB, 1), "), which this ramp is conditioned on -- ",
+      "not fixed constants like tier 1's."))
+
+htmltools::tagList(p2, cond_note)
+```
+
+```{r ec_check_heading, results='asis', echo=FALSE, eval=has_ec_check}
+cat("\n### Exceptional Circumstances Check\n")
+```
+
+```{r ec_check_plot, eval=has_ec_check}
+# Does real, observed data (post the simulation's own projection start)
+# still fall inside the range a closed-loop simulation projected for
+# it -- exceptional-circumstances checking, the same idea as
+# makeECblob()/plotECCheck() (2026_DFO_Herr_MS3-SISCAH/ms3Rtools.R,
+# SISCAH/R/SISCAplots.R). Interactive plotly, like every other panel
+# on this page -- mv_plot_ec_check() (R/plot_ec_check.R). A separate,
+# static figure that matches the FSRR's own Figure 5
+# (docs/FSRR-SablefishMP_2026_forReview.docx) as closely as possible
+# is sableMP2026's own plotECCheck(), not this one -- not part of this
+# dashboard at all, since it is a one-off match to that external
+# document's specific look, not a generic, reusable dashboard panel.
+tMPyear <- NULL
+if (has_ec_index) tMPyear <- min(mv$ec_index$year[mv$ec_index$period == "post"])
+if (is.null(tMPyear) && has_ec_catch)
+  tMPyear <- min(mv$ec_catch$year[mv$ec_catch$period == "post"])
+
+p_out <- modelVis::mv_plot_ec_check(
+  ec_index = if (has_ec_index) mv$ec_index else NULL,
+  ec_catch = if (has_ec_catch) mv$ec_catch else NULL,
+  tMPyear  = tMPyear)
+
+ec_note <- if (!is.null(tMPyear))
+  htmltools::div(
+    style = paste0("font-size:12px; color:#666; padding:4px 0 0 4px; ",
+                   "font-family:Arial,sans-serif;"),
+    paste0(
+      "Shaded band: 95% simulation envelope. Line: simulation median. ",
+      "Dashed line: start of the ", tMPyear,
+      " projection, between the last year of history (", tMPyear - 1,
+      ") and the first simulated year (", tMPyear, ")."))
+
+htmltools::tagList(p_out, ec_note)
+```
+

@@ -71,10 +71,13 @@ is_mp      <- identical(meta$mode, "MP")
 ```{r child_data, child=system.file("rmd", "child_data_summary.Rmd", package = "modelVis")}
 ```
 
-```{r child_glance, child=system.file("rmd", "child_at_a_glance.Rmd", package = "modelVis")}
+```{r child_glance, child=system.file("rmd", "child_at_a_glance.Rmd", package = "modelVis"), eval=.mv_has_data(mv$spawning_biomass, "est")}
 ```
 
-```{r child_index, child=system.file("rmd", "child_index_fits.Rmd", package = "modelVis"), eval=.mv_has_data(mv$index_fits, "obs")}
+```{r child_mp_results, child=system.file("rmd", "child_mp_results.Rmd", package = "modelVis"), eval=is_mp}
+```
+
+```{r child_index, child=system.file("rmd", "child_index_fits.Rmd", package = "modelVis"), eval=.mv_has_data(mv$index_fits, "pred")}
 ```
 
 ```{r child_catch, child=system.file("rmd", "child_catch_fits.Rmd", package = "modelVis"), eval=.mv_has_data(mv$catch_fits, "obs")}

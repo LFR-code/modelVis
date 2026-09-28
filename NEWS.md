@@ -1,3 +1,91 @@
+# modelVis (unreleased)
+
+## A dedicated "MP Results" page
+
+* **New `child_mp_results.Rmd` page**, shown when `meta$mode == "MP"`
+  (`vis_fit.Rmd`'s existing, previously-unused `is_mp` flag). Holds
+  everything specific to a management procedure's output in one
+  place, separate from the general assessment-diagnostics pages:
+  * The "Harvest Control Rule" and "Sub-legal Cap (Tier 2 Ramp)" tabs,
+    moved here from `child_at_a_glance.Rmd`'s tabset (that page's
+    "All Biomass Components" tab, general diagnostics content, stays
+    where it was).
+  * **Both HCR panels now plot biomass relative to their own
+    reference point (B/B0), not absolute kt** -- matching how a
+    Science Response Report's HCR figure plots target harvest rate
+    against a biomass ratio rather than an absolute scale. Hover text
+    and the on-plot annotation still report the underlying absolute
+    biomass and TAC.
+  * **The "B0" label itself is overridable**, via new
+    `meta$hcr_bref_label`/`hcr_sublegal_bref_label` (each defaults to
+    `"B0"`, so a model that really does mean unfished biomass is
+    unaffected). `mv$hcr$B0`/`mv$hcr_sublegal$B0` are generic field
+    names -- for a model where the reference is actually a Bmsy-type
+    productivity quantity rather than unfished biomass, labelling
+    every axis/hover/sidebar "B0" is wrong, not a simplification.
+  * **The "Max harvest rate" sidebar input shows three decimal
+    digits, not two.** A two-digit default silently rounded a rate
+    like `0.064` to `0.06` in the box -- the wrong number, not just
+    less precise. The lower/upper control point inputs are still two
+    digits (0.4/0.6-type fractions don't need a third).
+  * **New combined data + biomass panel** ("Biomass, Landings, and
+    Scaled Indices"): landings as bars, each fleet's raw index scaled
+    to biomass-equivalent units by a new `mv$catchability` component,
+    and the biomass trajectory as a line -- all on one year axis, so
+    a reader can see the estimate is built from real data rather than
+    presented in isolation. Built entirely from existing components
+    (`mv$spawning_biomass`, `mv$landed_catch_total`, `mv$index_fits`)
+    plus the one new one. A model with index data but no fitted
+    biomass or catchability at all (no model fit to speak of) still
+    gets this panel, titled "Abundance Indices" instead and showing
+    its raw index series directly rather than nothing; only a model
+    with neither a biomass trend nor any index data omits the panel.
+    The landings axis range is set wider than the data needs (4x the
+    max), so bars stay a secondary visual element behind the biomass
+    line rather than filling the whole panel height -- matching the
+    FSRR's own Figure 1, which does the same.
+  * **New "Exceptional Circumstances Check" tab**: does real, observed
+    data still fall inside the range a closed-loop simulation projected
+    for it. Two stacked panels sharing a year axis, `mv$ec_index` (top)
+    and `mv$ec_catch` (bottom); the tab (heading included, via a
+    `results='asis'` gate -- a plain `###` heading renders even when
+    its own chunk is skipped) is present only when at least one of the
+    two has a real envelope. New exported `mv_plot_ec_check()`
+    (`R/plot_ec_check.R`) draws the figure, interactive plotly like
+    every other `mv_plot_*()` here.
+
+    `mv$ec_index`'s panel is a per-year posterior predictive interval
+    for its historical years -- a vertical segment with the real
+    observation as a filled point on top, since each year's real
+    observation is its own independent draw of the survey, not a
+    quantity that interpolates between years -- and a continuous ribbon
+    for its projection years, which have no real observation yet to
+    compare against. `mv$ec_catch`'s panel, if supplied, is a genuine
+    simulation envelope instead: a ribbon, a median line, and
+    filled/open points before/after the reference year. All traces in a
+    panel share a `legendgroup` and toggle together; a caption below
+    the plot explains what each panel's shading means.
+
+    (A model package's own static match to an external document's
+    specific figure, such as `sableMP2026`'s `plotECCheck()` for the
+    FSRR's Figure 5, is a separate function and not part of this
+    dashboard.)
+
+## Two more empty-page cases, both page-level gates that were missing
+
+* **"At a Glance" was included unconditionally**, unlike every other
+  page in `vis_fit.Rmd`. Its content (after the HCR tabs above moved
+  out) is entirely gated on a real biomass trend, so a model with none
+  rendered a page with a title and nothing under it. Now gated the
+  same way at the `vis_fit.Rmd` level, so the page itself is omitted.
+* **"Index Fits" was gated on having raw observations, not fitted
+  values.** A page titled "Index Fits with Residuals" for a model that
+  never fits anything -- only observes -- showed real observation
+  points next to an empty residuals panel and a fit line with nothing
+  on it. Now gated on `mv$index_fits$pred` having real values instead
+  of `obs`; a model with observations but no fit gets its index series
+  shown in the "MP Results"/"Abundance Indices" panel above instead.
+
 # modelVis 0.1.10
 
 ## Content-aware page and tab visibility
