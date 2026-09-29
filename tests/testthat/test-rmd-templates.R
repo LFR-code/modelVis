@@ -1,17 +1,18 @@
 # test-rmd-templates.R
 # Tests for Rmd template integrity.
 
-test_that("no duplicate chunk labels across templates", {
+test_that("no duplicate chunk labels within a render tree", {
   df <- find_chunk_labels()
   expect_true(nrow(df) > 0)
 
-  dupes <- df$label[duplicated(df$label)]
+  key <- paste(df$tree, df$label, sep = "\r")
+  dupes <- key[duplicated(key)]
   if (length(dupes) > 0) {
-    dupe_info <- df[df$label %in% dupes, , drop = FALSE]
+    dupe_info <- df[key %in% dupes, , drop = FALSE]
     msg <- paste(
       apply(
         X = dupe_info, MARGIN = 1,
-        FUN = function(r) paste(r["file"], r["label"],
+        FUN = function(r) paste(r["tree"], r["file"], r["label"],
                                 sep = ":")
       ),
       collapse = ", "
