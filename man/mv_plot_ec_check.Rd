@@ -40,7 +40,6 @@ filled/open points before/after the reference year.
 
 This is what \code{child_mp_results.Rmd}'s "Exceptional Circumstances
 Check" tab calls internally; exported so a model package (or a
-user with a bare \code{ec_index}/\code{ec_catch} data.frame, e.g. from
-\code{sableMP2026::ecIndexPPI()}) can generate the same figure outside a
-rendered dashboard.
+user with a bare \code{ec_index}/\code{ec_catch} data.frame) can generate the
+same figure outside a rendered dashboard.
 }

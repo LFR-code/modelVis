@@ -142,7 +142,7 @@ ec_ribbon_pal <- c("rgba(100,100,100,0.30)", "rgba(123,94,168,0.25)")
   if (nrow(pre) > 0)
     p <- add_segments(p = p, x = pre$year, xend = pre$year,
       y = pre$lwr, yend = pre$upr,
-      line = list(color = col, width = 3),
+      line = list(color = col, width = 1),
       legendgroup = grp, showlegend = TRUE,
       name = "95% predictive interval",
       hovertemplate = "PPI %{x}: %{y:.3g}<extra></extra>")
@@ -155,11 +155,6 @@ ec_ribbon_pal <- c("rgba(100,100,100,0.30)", "rgba(123,94,168,0.25)")
       legendgroup = grp, showlegend = nrow(pre) == 0,
       name = "95% predictive interval",
       hovertemplate = "PPI %{x}: %{y:.3g}<extra></extra>")
-
-  p <- add_lines(p = p, x = df$year, y = df$med,
-    line = list(color = col, width = 1, dash = "dot"),
-    legendgroup = grp, showlegend = FALSE,
-    hovertemplate = "median %{x}: %{y:.3g}<extra></extra>")
 
   obs_sub <- pre[!is.na(pre$obs), , drop = FALSE]
   if (nrow(obs_sub) > 0)
@@ -205,9 +200,8 @@ ec_ribbon_pal <- c("rgba(100,100,100,0.30)", "rgba(123,94,168,0.25)")
 #'
 #' This is what `child_mp_results.Rmd`'s "Exceptional Circumstances
 #' Check" tab calls internally; exported so a model package (or a
-#' user with a bare `ec_index`/`ec_catch` data.frame, e.g. from
-#' `sableMP2026::ecIndexPPI()`) can generate the same figure outside a
-#' rendered dashboard.
+#' user with a bare `ec_index`/`ec_catch` data.frame) can generate the
+#' same figure outside a rendered dashboard.
 #'
 #' @param ec_index A `data.frame` with `year`, `lwr`, `med`, `upr`,
 #'   `obs`, `period` (`period` is `"pre"`/`"post"` a reference year) --
