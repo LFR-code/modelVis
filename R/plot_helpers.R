@@ -2,6 +2,26 @@
 # Label annotation helpers and interactive controls for
 # plotly plots.
 
+#' Append a unit to an axis/trace label
+#'
+#' Appends \code{" (unit)"} to \code{label} when \code{unit} is
+#' supplied and non-empty; returns \code{label} unchanged otherwise, so
+#' a caller whose \code{meta$units} is absent, \code{NULL}, or an empty
+#' string for a given quantity renders exactly as it did before units
+#' existed.
+#'
+#' @param label Base axis/trace text, e.g. \code{"Biomass"}.
+#' @param unit Unit string, e.g. \code{"kt"}, or \code{NULL}/\code{""}.
+#' @return \code{label}, optionally with \code{" (unit)"} appended.
+#' @export
+mv_unit_label <- function(label, unit) {
+  if (is.null(unit) || !nzchar(unit)) {
+    return(label)
+  }
+  paste0(label, " (", unit, ")")
+}
+
+
 #' Top annotation label
 #'
 #' Creates a plotly annotation positioned above the plot

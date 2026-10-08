@@ -120,7 +120,7 @@ make_fit_panel <- function(fl, stk, has_stk, panel_lbl) {
 
   lay_fit <- modelVis::mv_layout()
   lay_fit$annotations  <- list(mv_top_label(label = panel_lbl))
-  lay_fit$yaxis$title  <- "Index"
+  lay_fit$yaxis$title  <- mv_unit_label("Index", meta$units$index)
   if (has_idx_q) {
     lay_fit$xaxis$tickmode <- "array"
     lay_fit$xaxis$tickvals <- as.list(yr_ticks)

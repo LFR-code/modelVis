@@ -8,110 +8,126 @@ Row {.tabset}
 ### Time-Averaged Fits
 
 ```{r age_avg_grid}
-# Fleets x sexes grid of time-averaged age comp fits
-# (bars = expected/predicted, points = observed)
+# One gear's time-averaged age-comp fit at a time, switched with a
+# dropdown, rather than every gear squashed into one small-multiples
+# grid -- each gear's own age range and proportions are only legible
+# at a size a full-width single panel gives them. A gear with no real
+# observed age data is left out of the dropdown entirely, even when a
+# model-computed expected proportion exists for it anyway (a gear
+# outside the estimation model's own fitted-fleet set still gets a
+# selectivity-implied expected proportion -- it was just never fit
+# against any real data, so there's nothing for this panel to compare
+# it to). Filtering on obs rather than obs-or-pred is deliberate: pred
+# alone is not evidence this gear has any age data.
 age_fleets <- unique(mv$age_comp_fits$fleet)
 age_sexes  <- unique(mv$age_comp_fits$sex)
 fc <- mv_fleet_colours(fleet_names = age_fleets)
 
-plot_list <- list()
-for (fl in age_fleets) {
-  for (sx in age_sexes) {
-    sub <- mv$age_comp_fits[
-      mv$age_comp_fits$fleet == fl &
-        mv$age_comp_fits$sex == sx,
-      , drop = FALSE
-    ]
-    if (nrow(sub) == 0) next
+valid_fleets <- Filter(function(fl) {
+  sub <- mv$age_comp_fits[mv$age_comp_fits$fleet == fl, , drop = FALSE]
+  nrow(sub) > 0 && any(!is.na(sub$obs))
+}, age_fleets)
 
-    # Compute time averages
-    avg_obs <- tapply(
-      X = sub$obs, INDEX = sub$age,
-      FUN = mean, na.rm = TRUE
-    )
-    avg_pred <- tapply(
-      X = sub$pred, INDEX = sub$age,
-      FUN = mean, na.rm = TRUE
-    )
-    avg_ages <- as.numeric(names(avg_obs))
+if (length(valid_fleets) == 0L) {
+  htmltools::div("No age composition data or fit available for any gear.")
+} else {
+  default_fl   <- valid_fleets[1]
+  trace_ranges <- list()
+  trace_cursor <- 0L
+  p <- plot_ly()
 
-    lbl <- if (length(age_sexes) > 1) {
-      paste(fl, "-", sx)
-    } else {
-      fl
+  for (fl in valid_fleets) {
+    idx_this  <- integer(0)
+    fl_visible <- identical(fl, default_fl)
+    for (sx in age_sexes) {
+      sub <- mv$age_comp_fits[
+        mv$age_comp_fits$fleet == fl &
+          mv$age_comp_fits$sex == sx,
+        , drop = FALSE
+      ]
+      if (nrow(sub) == 0) next
+
+      avg_obs <- tapply(
+        X = sub$obs, INDEX = sub$age,
+        FUN = mean, na.rm = TRUE
+      )
+      avg_pred <- tapply(
+        X = sub$pred, INDEX = sub$age,
+        FUN = mean, na.rm = TRUE
+      )
+      avg_ages <- as.numeric(names(avg_obs))
+
+      multi_sex <- length(age_sexes) > 1
+      sx_extra  <- if (multi_sex) paste0(" (", sx, ")") else ""
+
+      # Observed: grey bars
+      p <- add_bars(
+        p = p,
+        x = avg_ages, y = as.numeric(avg_obs),
+        marker = list(
+          color = "rgba(180,180,180,0.6)",
+          line = list(color = "white", width = 0.5)
+        ),
+        visible = fl_visible, showlegend = FALSE,
+        hovertemplate = paste0(
+          "Age %{x}: %{y:.4f}<extra>Obs", sx_extra, "</extra>"
+        )
+      )
+      idx_this <- c(idx_this, trace_cursor); trace_cursor <- trace_cursor + 1L
+
+      # Predicted: coloured line + points, one trace -- a separate
+      # markers-only trace sitting on top of a separate line-only
+      # trace (even with hoverinfo="skip" on the markers) leaves the
+      # line with no working hover at the marker's own x position,
+      # which is most of the line's length at this point density. One
+      # "lines+markers" trace with a single hovertemplate has no such
+      # gap.
+      p <- add_trace(
+        p = p, type = "scatter", mode = "lines+markers",
+        x = avg_ages, y = as.numeric(avg_pred),
+        line = list(color = fc[fl], width = 1.5),
+        marker = list(
+          color = fc[fl], size = 4,
+          line = list(color = "white", width = 0.5)
+        ),
+        visible = fl_visible,
+        showlegend = multi_sex, name = sx,
+        hovertemplate = paste0(
+          "Age %{x}: %{y:.4f}<extra>Pred", sx_extra, "</extra>"
+        )
+      )
+      idx_this <- c(idx_this, trace_cursor); trace_cursor <- trace_cursor + 1L
     }
-
-    p <- plot_ly()
-    # Observed: grey bars
-    p <- add_bars(
-      p = p,
-      x = avg_ages, y = as.numeric(avg_obs),
-      marker = list(
-        color = "rgba(180,180,180,0.6)",
-        line = list(color = "white", width = 0.5)
-      ),
-      showlegend = FALSE,
-      hovertemplate = paste0(
-        "Age %{x}: %{y:.4f}<extra>Obs</extra>"
-      )
-    )
-    # Predicted: coloured points + line
-    p <- add_lines(
-      p = p,
-      x = avg_ages, y = as.numeric(avg_pred),
-      line = list(color = fc[fl], width = 1.5),
-      showlegend = FALSE,
-      hovertemplate = paste0(
-        "Age %{x}: %{y:.4f}<extra>Pred</extra>"
-      )
-    )
-    p <- add_markers(
-      p = p,
-      x = avg_ages, y = as.numeric(avg_pred),
-      marker = list(
-        color = fc[fl], size = 4,
-        line = list(color = "white", width = 0.5)
-      ),
-      showlegend = FALSE,
-      hoverinfo = "skip"
-    )
-
-    lay <- modelVis::mv_layout()
-    lay$annotations <- list(
-      mv_top_label(label = lbl)
-    )
-    lay$barmode <- "overlay"
-    p <- do.call(
-      what = layout, args = c(list(p = p), lay)
-    )
-    plot_list[[length(plot_list) + 1L]] <- p
+    trace_ranges[[fl]] <- idx_this
   }
-}
 
-ncol_grid <- length(age_sexes)
-nrow_grid <- length(plot_list) %/% ncol_grid
-p_out <- subplot(
-  plot_list,
-  nrows = nrow_grid,
-  shareX = TRUE, shareY = TRUE,
-  titleX = FALSE, titleY = FALSE,
-  margin = 0.05
-)
-p_out <- layout(
-  p = p_out,
-  annotations = list(
-    mv_bottom_label(label = "Age"),
-    mv_left_label(label = "Mean proportion")
-  )
-)
-modelVis::mv_config(p = p_out)
+  n_traces <- trace_cursor
+  gear_buttons <- lapply(valid_fleets, function(fl) {
+    vis <- rep(FALSE, n_traces)
+    vis[trace_ranges[[fl]] + 1L] <- TRUE
+    list(label = fl, method = "restyle",
+        args = list(list(visible = as.list(vis))))
+  })
+
+  lay <- modelVis::mv_layout()
+  lay$xaxis$title <- "Age"
+  lay$yaxis$title <- "Mean proportion"
+  lay$barmode     <- "overlay"
+  lay$updatemenus <- list(list(
+    type = "dropdown", direction = "down", active = 0L,
+    x = 0.0, xanchor = "left", y = 1.12, yanchor = "bottom",
+    buttons = gear_buttons
+  ))
+  p <- do.call(what = layout, args = c(list(p = p), lay))
+  modelVis::mv_config(p = p)
+}
 ```
 
-```{r age_resid_bubble_heading, results='asis', echo=FALSE, eval=!is.null(mv$age_comp_resids)}
+```{r age_resid_bubble_heading, results='asis', echo=FALSE, eval=!is.null(mv$age_comp_resids) && !identical(meta$show_age_resid_bubbles, FALSE)}
 cat("\n### Residual Bubbles\n")
 ```
 
-```{r age_resid_bubble, eval=!is.null(mv$age_comp_resids)}
+```{r age_resid_bubble, eval=!is.null(mv$age_comp_resids) && !identical(meta$show_age_resid_bubbles, FALSE)}
 if (!is.null(mv$age_comp_resids)) {
   resid_plots <- list()
   for (fl in age_fleets) {
@@ -136,9 +152,11 @@ if (!is.null(mv$age_comp_resids)) {
 }
 ```
 
-### Yearly Fits
+```{r age_yearly_heading, results='asis', echo=FALSE, eval=!identical(meta$show_age_yearly_fits, FALSE)}
+cat("\n### Yearly Fits\n")
+```
 
-```{r age_yearly_grid}
+```{r age_yearly_grid, eval=!identical(meta$show_age_yearly_fits, FALSE)}
 # Per fleet x sex yearly comp grid
 plot_list <- list()
 for (fl in age_fleets) {

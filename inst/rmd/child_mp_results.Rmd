@@ -12,7 +12,18 @@ MP Results
 # them in. Gate the whole panel on having either, so a method with
 # truly nothing (neither a biomass estimate nor index data) skips it
 # rather than rendering an empty shell.
-has_mp_biomass  <- .mv_has_data(mv$spawning_biomass, "est")
+# This page's headline biomass line is whatever the HCR actually acts
+# on -- generically spawning biomass, but meta$hcr_label (set when a
+# model's control rule ramps on something else, e.g. sableMP2026's
+# "Legal") names which quantity that really is, and mv$legal_biomass
+# is where that one lives. Reading mv$spawning_biomass here regardless
+# of hcr_label would show a different series than the one labelled
+# (spawning biomass labelled "Legal biomass"), once mv$spawning_biomass
+# is wired up to a real, distinct SSB rather than standing in for it.
+mp_bio_series <- if (!is.null(meta$hcr_label) && nzchar(meta$hcr_label) &&
+                     .mv_has_data(mv$legal_biomass, "est"))
+  mv$legal_biomass else mv$spawning_biomass
+has_mp_biomass  <- .mv_has_data(mp_bio_series, "est")
 has_mp_index    <- .mv_has_data(mv$index_fits, "obs")
 has_mp_evidence <- has_mp_biomass || has_mp_index
 
@@ -99,7 +110,7 @@ if (!is.null(idx)) {
 }
 
 if (has_mp_biomass) {
-  bio <- mv$spawning_biomass[order(mv$spawning_biomass$year), , drop = FALSE]
+  bio <- mp_bio_series[order(mp_bio_series$year), , drop = FALSE]
   p <- add_lines(p = p, x = bio$year, y = bio$est,
     line = list(color = "#222222", width = 2.5), name = bio_lbl,
     hovertemplate = paste0(bio_lbl, " %{x}: %{y:.3g}<extra></extra>"))
@@ -107,7 +118,9 @@ if (has_mp_biomass) {
 
 lay <- modelVis::mv_layout()
 lay$xaxis$title      <- "Year"
-lay$yaxis$title       <- if (has_mp_biomass) bio_lbl else "Index"
+lay$yaxis$title       <- if (has_mp_biomass)
+  mv_unit_label(bio_lbl, meta$units$biomass) else
+  mv_unit_label("Index", meta$units$index)
 lay$yaxis$rangemode   <- "tozero"
 if (!is.null(mv$landed_catch_total)) {
   # A landings axis auto-scaled to its own data fills the whole plot
@@ -117,7 +130,8 @@ if (!is.null(mv$landed_catch_total)) {
   # secondary visual element (roughly the bottom quarter of the
   # panel) rather than dominating it. Matched here the same way.
   landMax <- max(mv$landed_catch_total$est, na.rm = TRUE)
-  lay$yaxis2 <- list(overlaying = "y", side = "right", title = "Landings",
+  lay$yaxis2 <- list(overlaying = "y", side = "right",
+                     title = mv_unit_label("Landings", meta$units$landings),
                      showgrid = FALSE, range = c(0, landMax * 4))
   lay$barmode <- "overlay"
 }
@@ -282,6 +296,7 @@ inp_panel <- htmltools::div(
   htmltools::div(
     id = "hcr_out", style = sty_out,
     htmltools::HTML(paste0(
+      hcr_lbl, "biomass: <strong>", round(predB * 1000), " t</strong><br>",
       "TAC: <strong>", round(hcr$tac * 1000), " t</strong><br>",
       hcr_lbl, "U = <strong>",  round(hcr$targU, 3), "</strong>"))))
 
@@ -359,6 +374,7 @@ js_code <- sprintf(
       "annotations[0].y": targU
     });
     document.getElementById("hcr_out").innerHTML =
+      lbl + "biomass: <strong>" + Math.round(predB * 1000) + " t</strong><br>" +
       "TAC: <strong>" + Math.round(tac * 1000) + " t</strong><br>" +
       lbl + "U = <strong>" + targU.toFixed(3) + "</strong>";
   }

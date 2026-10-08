@@ -78,7 +78,7 @@ if (nrow(catch_fl) > 0) {
 
     lay <- modelVis::mv_layout()
     lay$annotations <- list(mv_top_label(label = panel_lbl))
-    lay$yaxis$title <- if (fl %in% sok_fls) "SOK catch (fish-equiv t)" else "Landings"
+    lay$yaxis$title <- if (fl %in% sok_fls) "SOK catch (fish-equiv t)" else mv_unit_label("Landings", meta$units$landings)
     if (has_catch_q) {
       lay$xaxis$tickmode <- "array"
       lay$xaxis$tickvals <- as.list(c_yr_ticks)

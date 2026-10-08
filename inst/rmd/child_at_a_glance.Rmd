@@ -84,7 +84,7 @@ if (has_refpts && !is.null(mv$ref_points$lUmsy))
   }
   lay <- modelVis::mv_layout()
   if (show_label && !is.null(stk)) lay$annotations <- list(mv_top_label(label=stk))
-  lay$yaxis$title     <- "Spawn. B"
+  lay$yaxis$title     <- mv_unit_label("Spawn. B", meta$units$biomass)
   lay$yaxis$rangemode <- "tozero"
   do.call(layout, c(list(p=p), lay))
 }
@@ -112,7 +112,7 @@ if (has_refpts && !is.null(mv$ref_points$lUmsy))
       y0=mv$sr_params$R0, y1=mv$sr_params$R0,
       line=list(color="#999999", width=1.5, dash="dash")))
   lay <- modelVis::mv_layout()
-  lay$yaxis$title     <- "Recruitment"
+  lay$yaxis$title     <- mv_unit_label("Recruitment", meta$units$recruitment)
   lay$yaxis$rangemode <- "tozero"
   lay$shapes <- rec_sh
   do.call(layout, c(list(p=p), lay))
@@ -121,14 +121,23 @@ if (has_refpts && !is.null(mv$ref_points$lUmsy))
 .glance_hr <- function(stk, si) {
   has_stk <- !is.null(stk)
   p <- plot_ly()
+  # Landings bars sit on a secondary axis (y2) behind the harvest-rate
+  # line, so they are a backdrop, not the panel's main subject -- a
+  # range 3x the data's own max keeps the tallest bar at about a third
+  # of the panel height rather than dominating it (y2's own ticks are
+  # hidden, so only the bar heights relative to each other are legible
+  # either way).
+  landings_range <- NULL
   if (!is.null(mv$landed_catch_total)) {
     ct   <- mv$landed_catch_total
     ct_s <- if (has_stk && "stock" %in% names(ct)) ct[ct$stock==stk, , drop=FALSE] else ct
-    if (nrow(ct_s) > 0)
+    if (nrow(ct_s) > 0) {
       p <- add_bars(p=p, x=ct_s$year, y=ct_s$est,
-        marker=list(color="rgba(200,200,200,0.4)"), name="Catch",
+        marker=list(color="rgba(200,200,200,0.4)"), name="Landings",
         yaxis="y2", showlegend=FALSE,
-        hovertemplate="Catch %{x}: %{y:.3g}<extra></extra>")
+        hovertemplate="Landings %{x}: %{y:.3g}<extra></extra>")
+      landings_range <- c(0, max(ct_s$est, na.rm=TRUE) * 3)
+    }
   }
   if (!is.null(hr)) {
     hr_fls <- if ("fleet" %in% names(hr)) unique(hr$fleet) else "fleet"
@@ -168,7 +177,9 @@ if (has_refpts && !is.null(mv$ref_points$lUmsy))
   lay$xaxis$title     <- "Year"
   lay$yaxis$title     <- hr_label
   lay$yaxis$rangemode <- "tozero"
-  lay$yaxis2 <- list(overlaying="y", side="right", title="Catch", showgrid=FALSE)
+  lay$yaxis2 <- list(overlaying="y", side="right",
+                     title=mv_unit_label("Landings", meta$units$landings),
+                     showgrid=FALSE, range=landings_range)
   lay$shapes  <- hr_shapes
   lay$barmode <- "overlay"
   do.call(layout, c(list(p=p), lay))
@@ -229,18 +240,6 @@ bio_pal  <- c("#d62728", "#1f77b4", "#ff7f0e", "#2ca02c", "#9467bd")
     legendgroup = "Spawning", showlegend = (!has_stk || si == 1L),
     hovertemplate = "Spawning %{x}: %{y:.3g}<extra></extra>")
 
-  # Total biomass
-  if (!is.null(mv$total_biomass)) {
-    tb     <- mv$total_biomass
-    has_tb_stk <- "stock" %in% names(tb) && length(unique(tb$stock)) > 1L
-    sub_tb <- if (has_stk && has_tb_stk) tb[tb$stock == stk, , drop = FALSE] else tb
-    sub_tb <- sub_tb[order(sub_tb$year), , drop = FALSE]
-    p <- add_lines(p = p, x = sub_tb$year, y = sub_tb$est,
-      line = list(color = "#d62728", width = 2, dash = "dot"), name = "Total",
-      legendgroup = "Total", showlegend = (!has_stk || si == 1L),
-      hovertemplate = "Total %{x}: %{y:.3g}<extra></extra>")
-  }
-
   # Legal biomass
   if (!is.null(mv$legal_biomass)) {
     lb     <- mv$legal_biomass
@@ -269,7 +268,7 @@ bio_pal  <- c("#d62728", "#1f77b4", "#ff7f0e", "#2ca02c", "#9467bd")
 
   lay <- modelVis::mv_layout()
   lay$xaxis$title <- "Year"
-  lay$yaxis$title <- "Biomass"
+  lay$yaxis$title <- mv_unit_label("Biomass", meta$units$biomass)
   lay$updatemenus <- mv_log_linear_buttons()
   if (has_stk) lay$annotations <- list(mv_top_label(label = stk))
   do.call(layout, c(list(p = p), lay))

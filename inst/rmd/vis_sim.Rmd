@@ -131,7 +131,7 @@ p
 ```{r catch_envelope, eval=has_catch, fig.height=3}
 p <- mv_plot_trend(
   df       = mv$catch,
-  ylab     = "Catch (t)",
+  ylab     = "Landings (t)",
   colour   = "#d62728"
 )
 p <- plotly_build(p)
@@ -248,7 +248,7 @@ if (nrow(hr_comm) > 0) {
 }
 ```
 
-### Catch by fleet
+### Landings by fleet
 
 ```{r catch_fleet, eval=has_catch}
 ct_comm <- mv$catch_by_fleet[
@@ -259,7 +259,7 @@ if (nrow(ct_comm) > 0) {
   mv_plot_trend_multi(
     df      = ct_comm,
     group   = "fleet",
-    ylab    = "Catch (t)",
+    ylab    = "Landings (t)",
     colours = mv_fleet_colours(
       fleet_names = comm_fleets
     )
@@ -480,7 +480,7 @@ p <- do.call(
 mv_config(p = p)
 ```
 
-### Catch
+### Landings
 
 ```{r rep_catch_slider}
 ct_traces <- mv$traces$catch
@@ -502,7 +502,7 @@ for (i in seq_along(good_reps)) {
 
 lay2 <- mv_layout()
 lay2$xaxis$title <- "Year"
-lay2$yaxis$title <- "Catch (t)"
+lay2$yaxis$title <- "Landings (t)"
 lay2$showlegend <- FALSE
 lay2$shapes <- list(tMP_vline)
 lay2$sliders <- list(list(
@@ -803,7 +803,7 @@ p
 
 ## Row
 
-### Catch: MS3 vs NCAM
+### Landings: MS3 vs NCAM
 
 ```{r cond_catch, eval=has_cond_valid && !is.null(mv$cond_valid$ncam_C)}
 cv <- mv$cond_valid
@@ -821,13 +821,13 @@ p <- plot_ly() %>%
   )
 lay <- mv_layout()
 lay$xaxis$title <- "Year"
-lay$yaxis$title <- "Catch (t)"
+lay$yaxis$title <- "Landings (t)"
 lay$showlegend <- TRUE
 p <- do.call(what = layout, args = c(list(p = p), lay))
 mv_config(p = p)
 ```
 
-### Catch relative error
+### Landings relative error
 
 ```{r cond_catch_re, eval=has_cond_valid && !is.null(mv$cond_valid$re_C)}
 cv <- mv$cond_valid
@@ -891,7 +891,7 @@ p$x$layout$shapes <- c(
 p
 ```
 
-### Catch variability
+### Landings variability
 
 ```{r catch_var, eval=has_catch}
 proj_idx <- which(years >= tMP_year)
@@ -905,7 +905,7 @@ if (length(proj_idx) > 1) {
   )
   mv_plot_trend(
     df     = cv_df,
-    ylab   = "Catch envelope width (relative)",
+    ylab   = "Landings envelope width (relative)",
     colour = "#8c564b"
   )
 }

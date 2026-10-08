@@ -124,7 +124,9 @@ if (!is.null(nm_areas)) {
 modelVis::mv_config(p = p_out)
 ```
 
-### Density-Dependent M
+```{r ddm_heading, results='asis', echo=FALSE, eval=isTRUE(meta$is_ddm) && !is.null(mv$ddm_data)}
+cat("\n### Density-Dependent M\n")
+```
 
 ```{r ddm_scatter, eval=isTRUE(meta$is_ddm) && !is.null(mv$ddm_data)}
 dd        <- mv$ddm_data
