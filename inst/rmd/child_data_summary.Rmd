@@ -162,34 +162,45 @@ pd_hess_val <- if (is.null(pd_hess) || is.na(pd_hess)) {
   ifelse(test = isTRUE(pd_hess), yes = "Yes", no = "No")
 }
 
+info_props <- c(
+  "Model type", "Label",
+  "Years", dim_label,
+  "Sexes", "Fleets",
+  "Commercial", "Survey",
+  "Areas",
+  "Length comps", "Discards",
+  "Density-dep M", "MCMC",
+  "Max gradient", "PD Hessian"
+)
+info_vals <- c(
+  meta$model_type,
+  meta$label,
+  paste(min(years), "-", max(years)),
+  dim_value,
+  paste(sexes, collapse = ", "),
+  paste(fleets, collapse = ", "),
+  paste(comm_fleets, collapse = ", "),
+  paste(survey_fleets, collapse = ", "),
+  paste(areas, collapse = ", "),
+  ifelse(test = has_len, yes = "Yes", no = "No"),
+  ifelse(test = has_disc, yes = "Yes", no = "No"),
+  ifelse(test = is_ddm, yes = "Yes", no = "No"),
+  ifelse(test = has_mcmc, yes = "Yes", no = "No"),
+  max_grad_val,
+  pd_hess_val
+)
+# Density-dependent M is a concept some model types don't have at all
+# (e.g. sableMP2026's ASDD has no such mechanism), as distinct from a
+# model that has it but isn't using it -- "No" claims the latter.
+# Dropped entirely, not shown as "No", when the caller never declared
+# meta$is_ddm one way or the other.
+if (is.null(meta$is_ddm)) {
+  keep <- info_props != "Density-dep M"
+  info_props <- info_props[keep]
+  info_vals  <- info_vals[keep]
+}
 info_df <- data.frame(
-  Property = c(
-    "Model type", "Label",
-    "Years", dim_label,
-    "Sexes", "Fleets",
-    "Commercial", "Survey",
-    "Areas",
-    "Length comps", "Discards",
-    "Density-dep M", "MCMC",
-    "Max gradient", "PD Hessian"
-  ),
-  Value = c(
-    meta$model_type,
-    meta$label,
-    paste(min(years), "-", max(years)),
-    dim_value,
-    paste(sexes, collapse = ", "),
-    paste(fleets, collapse = ", "),
-    paste(comm_fleets, collapse = ", "),
-    paste(survey_fleets, collapse = ", "),
-    paste(areas, collapse = ", "),
-    ifelse(test = has_len, yes = "Yes", no = "No"),
-    ifelse(test = has_disc, yes = "Yes", no = "No"),
-    ifelse(test = is_ddm, yes = "Yes", no = "No"),
-    ifelse(test = has_mcmc, yes = "Yes", no = "No"),
-    max_grad_val,
-    pd_hess_val
-  ),
+  Property = info_props, Value = info_vals,
   stringsAsFactors = FALSE
 )
 knitr::kable(
